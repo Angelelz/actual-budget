@@ -1,0 +1,99 @@
+name: actual-budget
+
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}']
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_PASSWORD: ${PG_PASS}
+
+  redis:
+    image: docker.io/library/redis:alpine
+    restart: unless-stopped
+    command: --save 60 1 --loglevel warning
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli ping | grep PONG']
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - ./data/redis:/data
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    restart: unless-stopped
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: 'false'
+    volumes:
+      - ./data/authentik/media:/media
+      - ./data/authentik/custom-templates:/templates
+    ports:
+      - '127.0.0.1:9000:9000'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG}
+    restart: unless-stopped
+    command: worker
+    user: root
+    environment:
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: 'false'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/authentik/media:/media
+      - ./data/authentik/certs:/certs
+      - ./data/authentik/custom-templates:/templates
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  actual-server:
+    image: docker.io/actualbudget/actual-server:latest
+    restart: unless-stopped
+    environment:
+      ACTUAL_LOGIN_METHOD: openid
+      ACTUAL_TRUSTED_PROXIES: ${ACTUAL_TRUSTED_PROXIES}
+      ACTUAL_OPENID_DISCOVERY_URL: ${ACTUAL_OPENID_DISCOVERY_URL}
+      ACTUAL_OPENID_CLIENT_ID: ${ACTUAL_OPENID_CLIENT_ID}
+      ACTUAL_OPENID_CLIENT_SECRET: ${ACTUAL_OPENID_CLIENT_SECRET}
+      ACTUAL_OPENID_SERVER_HOSTNAME: ${ACTUAL_OPENID_SERVER_HOSTNAME}
+    volumes:
+      - ./data/actual:/data
+    ports:
+      - '127.0.0.1:5006:5006'
+    healthcheck:
+      test: ['CMD-SHELL', 'node src/scripts/health-check.js']
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
