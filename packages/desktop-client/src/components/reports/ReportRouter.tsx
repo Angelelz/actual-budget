@@ -9,6 +9,7 @@ import { Calendar } from './reports/Calendar';
 import { CashFlow } from './reports/CashFlow';
 import { Crossover } from './reports/Crossover';
 import { CustomReport } from './reports/CustomReport';
+import { DebtProjection } from './reports/DebtProjection';
 import { Formula } from './reports/Formula';
 import { NetWorth } from './reports/NetWorth';
 import { Sankey } from './reports/Sankey';
@@ -42,6 +43,7 @@ export function ReportRouter() {
       )}
       <Route path="/cash-flow" element={<CashFlow />} />
       <Route path="/cash-flow/:id" element={<CashFlow />} />
+      <Route path="/debt-projection" element={<DebtProjection />} />
       <Route path="/custom" element={<CustomReport />} />
       <Route path="/custom/:id" element={<CustomReport />} />
       <Route path="/spending" element={<Spending />} />

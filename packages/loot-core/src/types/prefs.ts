@@ -20,6 +20,7 @@ export type SyncedPrefs = Partial<
     | 'upcomingScheduledTransactionLength'
     | 'autoIncomeBudgetHorizonMonths'
     | 'autoIncomeBudgetLastTargets'
+    | 'debtProjectionAccountPriority'
     | 'firstDayOfWeekIdx'
     | 'dateFormat'
     | 'numberFormat'
