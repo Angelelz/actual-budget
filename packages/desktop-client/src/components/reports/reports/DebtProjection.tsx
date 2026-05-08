@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
+import {
+  SvgCheveronDown,
+  SvgCheveronRight,
+} from '@actual-app/components/icons/v1';
 import { Paragraph } from '@actual-app/components/paragraph';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
@@ -10,6 +15,7 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { css } from '@emotion/css';
 import {
   Bar,
   CartesianGrid,
@@ -374,6 +380,103 @@ type ChartProps = {
   locale: ReturnType<typeof useLocale>;
 };
 
+type CustomTooltipProps = {
+  active?: boolean;
+  label?: string;
+  payload?: Array<{
+    name?: string;
+    value?: number;
+    color?: string;
+    dataKey?: string;
+  }>;
+  format: ReturnType<typeof useFormat>;
+};
+
+function CustomTooltip({ active, label, payload, format }: CustomTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div
+      className={css({
+        pointerEvents: 'none',
+        borderRadius: 4,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, .25)',
+        backgroundColor: theme.menuBackground,
+        color: theme.menuItemText,
+        border: `1px solid ${theme.tableBorder}`,
+        padding: '8px 10px',
+        fontSize: 12,
+        minWidth: 180,
+      })}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div
+          key={`${p.dataKey ?? i}`}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 12,
+            color: p.color,
+          }}
+        >
+          <span>{p.name}</span>
+          <span style={{ ...styles.tnum }}>
+            {format(
+              typeof p.value === 'number' ? p.value : 0,
+              'financial-with-sign',
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type CollapsibleSectionProps = {
+  title: ReactNode;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+  bodyStyle?: CSSProperties;
+};
+
+function CollapsibleSection({
+  title,
+  collapsed,
+  onToggle,
+  children,
+  bodyStyle,
+}: CollapsibleSectionProps) {
+  const Chevron = collapsed ? SvgCheveronRight : SvgCheveronDown;
+  return (
+    <View
+      style={{
+        backgroundColor: theme.tableBackground,
+        borderRadius: 6,
+        boxShadow: styles.cardShadow,
+        overflow: 'hidden',
+      }}
+    >
+      <Button
+        variant="bare"
+        onPress={onToggle}
+        style={{
+          width: '100%',
+          justifyContent: 'flex-start',
+          padding: '10px 12px',
+          fontWeight: 600,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Chevron width={14} height={14} />
+          {title}
+        </View>
+      </Button>
+      {!collapsed && <View style={bodyStyle}>{children}</View>}
+    </View>
+  );
+}
+
 function ProjectionChart({
   result,
   orderedIds,
@@ -382,6 +485,10 @@ function ProjectionChart({
   format,
   locale,
 }: ChartProps) {
+  const [chartCollapsed, setChartCollapsed] = useState(false);
+  const [milestonesCollapsed, setMilestonesCollapsed] = useState(false);
+  const [tableCollapsed, setTableCollapsed] = useState(false);
+
   // Build chart data: one row per month with surplus, total debt, and a
   // value per account.
   const data = useMemo(() => {
@@ -423,9 +530,17 @@ function ProjectionChart({
     [orderedIds, result, data, accountsById],
   );
 
+  // Chart grows when other sections are collapsed.
+  const chartHeight = milestonesCollapsed && tableCollapsed ? 600 : 400;
+
   return (
-    <View style={{ flex: 1, gap: 20 }}>
-      <View style={{ height: 360 }}>
+    <View style={{ flex: 1, gap: 12 }}>
+      <CollapsibleSection
+        title={<Trans>Projection chart</Trans>}
+        collapsed={chartCollapsed}
+        onToggle={() => setChartCollapsed(v => !v)}
+        bodyStyle={{ height: chartHeight, padding: 8 }}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data}>
             <CartesianGrid stroke={theme.tableBorder} strokeDasharray="3 3" />
@@ -435,18 +550,8 @@ function ProjectionChart({
               tickFormatter={v => format(v, 'financial-with-sign')}
             />
             <Tooltip
-              formatter={
-                ((value: unknown) =>
-                  format(
-                    typeof value === 'number' ? value : 0,
-                    'financial-with-sign',
-                  )) as never
-              }
-              labelStyle={{ color: theme.menuItemText }}
-              contentStyle={{
-                backgroundColor: theme.menuBackground,
-                border: `1px solid ${theme.tableBorder}`,
-              }}
+              content={(<CustomTooltip format={format} />) as never}
+              cursor={{ stroke: theme.tableBorder }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar
@@ -488,43 +593,44 @@ function ProjectionChart({
             ))}
           </ComposedChart>
         </ResponsiveContainer>
-      </View>
+      </CollapsibleSection>
 
       {milestones.length > 0 && (
-        <View
-          style={{
-            backgroundColor: theme.tableBackground,
-            borderRadius: 6,
-            padding: 12,
-            boxShadow: styles.cardShadow,
+        <CollapsibleSection
+          title={
+            <Trans>
+              Debt-free milestones ({{ count: milestones.length } as never})
+            </Trans>
+          }
+          collapsed={milestonesCollapsed}
+          onToggle={() => setMilestonesCollapsed(v => !v)}
+          bodyStyle={{
+            padding: '0 12px 12px 12px',
+            maxHeight: 200,
+            overflowY: 'auto',
           }}
         >
-          <Text style={{ fontWeight: 600, marginBottom: 6 }}>
-            <Trans>Debt-free milestones</Trans>
-          </Text>
           {milestones.map(m => (
-            <Text key={m.id} style={{ fontSize: 13 }}>
+            <Text key={m.id} style={{ fontSize: 13, padding: '2px 0' }}>
               <Trans>
                 <strong>{{ name: m.name } as never}</strong> — paid off in{' '}
                 {{ when: m.label } as never}
               </Trans>
             </Text>
           ))}
-        </View>
+        </CollapsibleSection>
       )}
 
-      <View
-        style={{
-          backgroundColor: theme.tableBackground,
-          borderRadius: 6,
+      <CollapsibleSection
+        title={<Trans>Month-by-month detail</Trans>}
+        collapsed={tableCollapsed}
+        onToggle={() => setTableCollapsed(v => !v)}
+        bodyStyle={{
           padding: 12,
-          boxShadow: styles.cardShadow,
+          maxHeight: 400,
           overflow: 'auto',
         }}
       >
-        <Text style={{ fontWeight: 600, marginBottom: 8 }}>
-          <Trans>Month-by-month detail</Trans>
-        </Text>
         <table
           style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}
         >
@@ -572,7 +678,7 @@ function ProjectionChart({
             ))}
           </tbody>
         </table>
-      </View>
+      </CollapsibleSection>
     </View>
   );
 }
