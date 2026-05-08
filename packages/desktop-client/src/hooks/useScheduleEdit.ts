@@ -60,6 +60,11 @@ type ScheduleEditAction =
       value: boolean;
     }
   | {
+      type: 'set-field';
+      field: 'auto_budget_category';
+      value: string | null;
+    }
+  | {
       type: 'set-transactions';
       transactions: TransactionEntity[];
       transactionId?: string;
@@ -110,6 +115,7 @@ function createScheduleEditReducer(useGetScheduledAmount: boolean = false) {
             date: schedule._date ?? null,
             posts_transaction: action.schedule.posts_transaction ?? false,
             name: schedule.name ?? null,
+            auto_budget_category: schedule.auto_budget_category ?? null,
           },
         };
       }
@@ -256,6 +262,7 @@ export function useScheduleEdit({
       date: null,
       posts_transaction: false,
       name: null,
+      auto_budget_category: null,
     },
     transactions: [],
     transactionsMode: adding ? 'matched' : 'linked',

@@ -28,6 +28,7 @@ import { loadPrefs } from '#prefs/prefsSlice';
 import { useDispatch, useSelector } from '#redux';
 
 import { AuthSettings } from './AuthSettings';
+import { AutoIncomeBudgetSettings } from './AutoIncomeBudgetSettings';
 import { Backups } from './Backups';
 import { BudgetTypeSettings } from './BudgetTypeSettings';
 import { CurrencySettings } from './Currency';
@@ -244,6 +245,7 @@ export function Settings() {
         <AuthSettings />
         <EncryptionSettings />
         <BudgetTypeSettings />
+        <AutoIncomeBudgetSettings />
         {isElectron() && <Backups />}
         <ExportBudget />
         <AdvancedToggle>

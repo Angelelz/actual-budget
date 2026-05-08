@@ -121,6 +121,7 @@ export type DbSchedule = {
   completed: 1 | 0;
   posts_transaction: 1 | 0;
   tombstone: 1 | 0;
+  auto_budget_category: string | null;
 };
 
 // type DbScheduleJsonPath = {
@@ -324,6 +325,7 @@ export type DbViewSchedule = {
   completed: DbSchedule['completed'];
   posts_transaction: DbSchedule['posts_transaction'];
   tombstone: DbSchedule['tombstone'];
+  auto_budget_category: DbSchedule['auto_budget_category'];
   _payee: DbPayeeMapping['targetId'];
   _account: DbAccount['id'];
   _amount: number;

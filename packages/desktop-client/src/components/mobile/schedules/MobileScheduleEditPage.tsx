@@ -102,6 +102,7 @@ export function MobileScheduleEditPage() {
           id: state.schedule.id,
           posts_transaction: state.fields.posts_transaction,
           name: state.fields.name,
+          auto_budget_category: state.fields.auto_budget_category || null,
         },
         conditions,
       },

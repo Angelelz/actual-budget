@@ -239,7 +239,7 @@ Authentik admin → **Directory → Users → Create** → username `<spouse-use
 
 ```js
 if (userIdFromDb == null) {
-  throw new Error("openid-grant-failed");
+  throw new Error('openid-grant-failed');
 }
 ```
 

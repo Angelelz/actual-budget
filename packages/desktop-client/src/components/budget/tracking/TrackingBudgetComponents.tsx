@@ -24,6 +24,7 @@ import { NotesButton } from '#components/NotesButton';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { Field, SheetCell } from '#components/table';
 import type { SheetCellProps } from '#components/table';
+import { useAutoManagedIncomeCategories } from '#hooks/useAutoManagedIncomeCategories';
 import { useCategoryScheduleGoalTemplateIndicator } from '#hooks/useCategoryScheduleGoalTemplateIndicator';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
@@ -224,6 +225,13 @@ export const CategoryMonth = memo(function CategoryMonth({
 
   const showScheduleIndicator = schedule && scheduleStatus;
 
+  const autoManagedIncomeCategories = useAutoManagedIncomeCategories();
+  const isAutoBudgetManaged =
+    !!category.is_income && autoManagedIncomeCategories.has(category.id);
+  const autoBudgetTitle = t(
+    'This category is governed by a scheduled income. To change the amount, edit the schedule. To budget extra income manually, create a separate income category.',
+  );
+
   return (
     <View
       style={{
@@ -349,46 +357,83 @@ export const CategoryMonth = memo(function CategoryMonth({
             </View>
           </>
         )}
-        <TrackingSheetCell
-          name="budget"
-          exposed={editing}
-          focused={editing}
-          width="flex"
-          onExpose={() => onEdit(category.id, month)}
-          style={{ ...(editing && { zIndex: 100 }), ...styles.tnum }}
-          textAlign="right"
-          valueStyle={{
-            cursor: 'default',
-            margin: 1,
-            padding: '0 4px',
-            borderRadius: 4,
-            ':hover': {
-              boxShadow: 'inset 0 0 0 1px ' + theme.pageTextSubdued,
-              backgroundColor: theme.budgetCurrentMonth,
-            },
-          }}
-          valueProps={{
-            binding: trackingBudget.catBudgeted(category.id),
-            type: 'financial',
-            getValueStyle: makeAmountGrey,
-            formatExpr: format.forEdit,
-            unformatExpr: format.fromEdit,
-          }}
-          inputProps={{
-            onBlur: () => {
-              onEdit(null);
-            },
-            style: {
-              backgroundColor: theme.budgetCurrentMonth,
-            },
-          }}
-          onSave={(parsedIntegerAmount: number | null) => {
-            onBudgetAction(month, 'budget-amount', {
-              category: category.id,
-              amount: parsedIntegerAmount ?? 0,
-            });
-          }}
-        />
+        {isAutoBudgetManaged ? (
+          <View
+            title={autoBudgetTitle}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              gap: 4,
+              padding: '0 4px',
+            }}
+          >
+            <SvgArrowsSynchronize
+              style={{
+                width: 11,
+                height: 11,
+                color: theme.pageTextLight,
+              }}
+            />
+            <TrackingCellValue
+              binding={trackingBudget.catBudgeted(category.id)}
+              type="financial"
+            >
+              {props => (
+                <CellValueText
+                  {...props}
+                  style={{
+                    ...styles.tnum,
+                    cursor: 'help',
+                    ...makeAmountGrey(props.value),
+                  }}
+                />
+              )}
+            </TrackingCellValue>
+          </View>
+        ) : (
+          <TrackingSheetCell
+            name="budget"
+            exposed={editing}
+            focused={editing}
+            width="flex"
+            onExpose={() => onEdit(category.id, month)}
+            style={{ ...(editing && { zIndex: 100 }), ...styles.tnum }}
+            textAlign="right"
+            valueStyle={{
+              cursor: 'default',
+              margin: 1,
+              padding: '0 4px',
+              borderRadius: 4,
+              ':hover': {
+                boxShadow: 'inset 0 0 0 1px ' + theme.pageTextSubdued,
+                backgroundColor: theme.budgetCurrentMonth,
+              },
+            }}
+            valueProps={{
+              binding: trackingBudget.catBudgeted(category.id),
+              type: 'financial',
+              getValueStyle: makeAmountGrey,
+              formatExpr: format.forEdit,
+              unformatExpr: format.fromEdit,
+            }}
+            inputProps={{
+              onBlur: () => {
+                onEdit(null);
+              },
+              style: {
+                backgroundColor: theme.budgetCurrentMonth,
+              },
+            }}
+            onSave={(parsedIntegerAmount: number | null) => {
+              onBudgetAction(month, 'budget-amount', {
+                category: category.id,
+                amount: parsedIntegerAmount ?? 0,
+              });
+            }}
+          />
+        )}
       </View>
       <Field name="spent" width="flex" style={{ textAlign: 'right' }}>
         <View

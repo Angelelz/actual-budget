@@ -105,6 +105,7 @@ export const schema = {
     completed: f('boolean'),
     posts_transaction: f('boolean'),
     tombstone: f('boolean'),
+    auto_budget_category: f('id', { ref: 'categories' }),
 
     // These are special fields that are actually pulled from the
     // underlying rule

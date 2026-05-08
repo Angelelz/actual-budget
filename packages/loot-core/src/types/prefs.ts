@@ -18,6 +18,8 @@ export type SyncedPrefs = Partial<
   Record<
     | 'budgetType'
     | 'upcomingScheduledTransactionLength'
+    | 'autoIncomeBudgetHorizonMonths'
+    | 'autoIncomeBudgetLastTargets'
     | 'firstDayOfWeekIdx'
     | 'dateFormat'
     | 'numberFormat'

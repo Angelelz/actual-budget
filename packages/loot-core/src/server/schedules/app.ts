@@ -7,6 +7,7 @@ import { logger } from '#platform/server/log';
 import { addTransactions } from '#server/accounts/sync';
 import { createApp } from '#server/app';
 import { aqlQuery } from '#server/aql';
+import { recomputeAutoIncomeBudgets } from '#server/budget/auto-income';
 import * as db from '#server/db';
 import { toDateRepr } from '#server/models';
 import { mutator, runMutator } from '#server/mutators';
@@ -299,6 +300,14 @@ export async function createSchedule({
     rule: ruleId,
   });
 
+  if (schedule?.auto_budget_category) {
+    try {
+      await recomputeAutoIncomeBudgets();
+    } catch (err) {
+      logger.warn('Failed to recompute auto-income budgets:', err);
+    }
+  }
+
   return scheduleId;
 }
 
@@ -317,6 +326,23 @@ export async function updateSchedule({
     throw new Error('You cannot change the rule of a schedule');
   }
   let rule;
+
+  // Track whether this update affects auto-income budgeting so we know
+  // to recompute after.
+  const prevAutoCategory = await db.first<Pick<db.DbSchedule, 'id'>>(
+    'SELECT auto_budget_category as id FROM schedules WHERE id = ?',
+    [schedule.id],
+  );
+  const prevAutoCategoryId = prevAutoCategory?.id ?? null;
+  const newAutoCategoryId =
+    schedule.auto_budget_category !== undefined
+      ? (schedule.auto_budget_category ?? null)
+      : prevAutoCategoryId;
+  const autoBudgetingChanged =
+    prevAutoCategoryId !== newAutoCategoryId ||
+    // If conditions (date/amount) might have changed and this schedule
+    // contributes to auto-budgeting, we always recompute.
+    (newAutoCategoryId != null && conditions != null);
 
   // This must be outside the `batchMessages` call because we change
   // and then read data
@@ -377,6 +403,14 @@ export async function updateSchedule({
     await db.updateWithSchema('schedules', schedule);
   });
 
+  if (autoBudgetingChanged) {
+    try {
+      await recomputeAutoIncomeBudgets();
+    } catch (err) {
+      logger.warn('Failed to recompute auto-income budgets:', err);
+    }
+  }
+
   return schedule.id;
 }
 
@@ -385,10 +419,24 @@ export async function deleteSchedule({ id }) {
     q('schedules').filter({ id }).calculate('rule'),
   );
 
+  const prev = await db.first<Pick<db.DbSchedule, 'id'>>(
+    'SELECT auto_budget_category as id FROM schedules WHERE id = ?',
+    [id],
+  );
+  const wasAutoBudgeted = prev?.id != null;
+
   await batchMessages(async () => {
     await db.delete_('rules', ruleId);
     await db.delete_('schedules', id);
   });
+
+  if (wasAutoBudgeted) {
+    try {
+      await recomputeAutoIncomeBudgets();
+    } catch (err) {
+      logger.warn('Failed to recompute auto-income budgets:', err);
+    }
+  }
 }
 
 export async function skipNextDate({ id }) {
@@ -590,6 +638,12 @@ async function advanceSchedulesService(syncSuccess) {
       syncDisabled: false,
     });
   }
+
+  try {
+    await recomputeAutoIncomeBudgets();
+  } catch (err) {
+    logger.warn('Failed to recompute auto-income budgets:', err);
+  }
 }
 
 export type SchedulesHandlers = {
@@ -601,6 +655,7 @@ export type SchedulesHandlers = {
   'schedule/force-run-service': typeof advanceSchedulesService;
   'schedule/discover': typeof discoverSchedules;
   'schedule/get-upcoming-dates': typeof getUpcomingDates;
+  'schedule/recompute-auto-income': typeof recomputeAutoIncomeBudgets;
 };
 
 // Expose functions to the client
@@ -620,6 +675,10 @@ app.method(
 );
 app.method('schedule/discover', discoverSchedules);
 app.method('schedule/get-upcoming-dates', getUpcomingDates);
+app.method(
+  'schedule/recompute-auto-income',
+  mutator(() => recomputeAutoIncomeBudgets()),
+);
 
 app.service(trackJSONPaths);
 

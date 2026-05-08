@@ -27,6 +27,7 @@ export type ScheduleEntity = {
   completed: boolean;
   posts_transaction: boolean;
   tombstone: boolean;
+  auto_budget_category?: string | null;
 
   // These are special fields that are actually pulled from the
   // underlying rule

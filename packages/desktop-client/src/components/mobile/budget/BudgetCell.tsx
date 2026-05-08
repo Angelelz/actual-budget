@@ -13,6 +13,7 @@ import { AutoTextSize } from 'auto-text-size';
 import { makeAmountGrey } from '#components/budget/util';
 import { PrivacyFilter } from '#components/PrivacyFilter';
 import { CellValue } from '#components/spreadsheet/CellValue';
+import { useAutoManagedIncomeCategories } from '#hooks/useAutoManagedIncomeCategories';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { useNotes } from '#hooks/useNotes';
@@ -52,6 +53,9 @@ export function BudgetCell<
   const { showUndoNotification } = useUndo();
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
   const categoryNotes = useNotes(category.id);
+  const autoManagedIncomeCategories = useAutoManagedIncomeCategories();
+  const isAutoBudgetManaged =
+    !!category.is_income && autoManagedIncomeCategories.has(category.id);
 
   const onSaveNotes = useCallback(async (id: string, notes: string) => {
     await send('notes-save', { id, note: notes });
@@ -164,15 +168,23 @@ export function BudgetCell<
         }) || (
           <Button
             variant="bare"
+            isDisabled={isAutoBudgetManaged}
             style={{
               ...PILL_STYLE,
               maxWidth: columnWidth,
               ...makeAmountGrey(value),
             }}
-            onPress={onOpenCategoryBudgetMenu}
-            aria-label={t('Open budget menu for {{categoryName}} category', {
-              categoryName: category.name,
-            })}
+            onPress={isAutoBudgetManaged ? undefined : onOpenCategoryBudgetMenu}
+            aria-label={
+              isAutoBudgetManaged
+                ? t(
+                    'Auto-budgeted from a scheduled income for {{categoryName}}',
+                    { categoryName: category.name },
+                  )
+                : t('Open budget menu for {{categoryName}} category', {
+                    categoryName: category.name,
+                  })
+            }
           >
             <PrivacyFilter>
               <AutoTextSize
