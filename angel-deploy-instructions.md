@@ -239,7 +239,7 @@ Authentik admin → **Directory → Users → Create** → username `<spouse-use
 
 ```js
 if (userIdFromDb == null) {
-  throw new Error('openid-grant-failed');
+  throw new Error("openid-grant-failed");
 }
 ```
 
@@ -540,3 +540,11 @@ Suggested approach: `restic` to Backblaze B2 or another offsite target, daily, w
 - [ ] Plan the credit-card payoff feature (the actual reason you forked) — will require building the sync-server image locally instead of pulling upstream.
 - [ ] Watch for SimpleFIN duplicate patterns on other bank pairs (Citi, Chase, Discover). Add per-account dedup rules as needed.
 - [ ] Authentik cleanup: delete `akadmin` user, confirm `<your-username>`'s email matches Gmail.
+
+## Deployment steps:
+
+cd ~/code/actual-budget
+git pull
+docker build -t actual-budget-fork:latest -f sync-server.Dockerfile .
+cd deploy && docker compose up -d actual-server
+docker compose logs -f actual-server
