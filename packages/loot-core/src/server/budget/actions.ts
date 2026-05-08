@@ -364,6 +364,194 @@ export async function set6MonthAvg({
   });
 }
 
+const DEFAULT_BUDGET_HORIZON_MONTHS = 12;
+const MIN_BUDGET_HORIZON_MONTHS = 1;
+const MAX_BUDGET_HORIZON_MONTHS = 60;
+
+function readBudgetHorizonMonths(): number {
+  const row = db.firstSync<Pick<db.DbPreference, 'value'>>(
+    `SELECT value FROM preferences WHERE id = ?`,
+    ['autoIncomeBudgetHorizonMonths'],
+  );
+  const parsed = row?.value ? parseInt(row.value, 10) : NaN;
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_BUDGET_HORIZON_MONTHS;
+  }
+  return Math.max(
+    MIN_BUDGET_HORIZON_MONTHS,
+    Math.min(MAX_BUDGET_HORIZON_MONTHS, parsed),
+  );
+}
+
+/**
+ * Copy the current month's budgeted amount for a single spend category
+ * forward into the next (horizon - 1) months. Income categories are
+ * skipped. Always overwrites existing future values.
+ */
+export async function setLongTerm({
+  category,
+  month,
+}: {
+  category: string;
+  month: string;
+}): Promise<void> {
+  const cat = await db.first<Pick<db.DbViewCategory, 'is_income'>>(
+    'SELECT is_income FROM v_categories WHERE id = ?',
+    [category],
+  );
+  if (!cat || cat.is_income === 1) {
+    return;
+  }
+
+  const amount = await getSheetValue(
+    monthUtils.sheetForMonth(month),
+    'budget-' + category,
+  );
+  const horizon = readBudgetHorizonMonths();
+
+  await batchMessages(async () => {
+    for (let i = 1; i < horizon; i++) {
+      const target = monthUtils.addMonths(month, i);
+      void setBudget({ category, month: target, amount });
+    }
+  });
+}
+
+/**
+ * For every visible spend category, copy this month's budget forward
+ * into the next (horizon - 1) months.
+ */
+export async function setLongTermMonth({
+  month,
+}: {
+  month: string;
+}): Promise<void> {
+  const categories = await db.all<db.DbViewCategoryWithGroupHidden>(
+    `
+    SELECT c.*
+    FROM categories c
+    LEFT JOIN category_groups g ON c.cat_group = g.id
+    WHERE c.tombstone = 0 AND c.hidden = 0 AND g.hidden = 0
+    `,
+  );
+
+  const horizon = readBudgetHorizonMonths();
+
+  await batchMessages(async () => {
+    for (const cat of categories) {
+      if (cat.is_income === 1) {
+        continue;
+      }
+      const amount = await getSheetValue(
+        monthUtils.sheetForMonth(month),
+        'budget-' + cat.id,
+      );
+      for (let i = 1; i < horizon; i++) {
+        const target = monthUtils.addMonths(month, i);
+        void setBudget({ category: cat.id, month: target, amount });
+      }
+    }
+  });
+}
+
+/**
+ * For a single spend category, add (lastBudgeted - lastSpent) to the
+ * current month's budget. Spend `sum-amount-{cat}` is negative, so the
+ * delta is computed as (lastBudgeted + lastSumAmount). Negative deltas
+ * (overspending) reduce the current budget. Income is skipped.
+ */
+export async function carryOverFromPrevious({
+  category,
+  month,
+}: {
+  category: string;
+  month: string;
+}): Promise<void> {
+  const cat = await db.first<Pick<db.DbViewCategory, 'is_income'>>(
+    'SELECT is_income FROM v_categories WHERE id = ?',
+    [category],
+  );
+  if (!cat || cat.is_income === 1) {
+    return;
+  }
+
+  const prevMonth = monthUtils.prevMonth(month);
+  const prevSheet = monthUtils.sheetForMonth(prevMonth);
+  const prevBudgeted = await getSheetValue(prevSheet, 'budget-' + category);
+  const prevSumAmount = await getSheetValue(
+    prevSheet,
+    'sum-amount-' + category,
+  );
+
+  // For spend categories, sum-amount is negative; delta is positive when
+  // we underspent and negative when we overspent.
+  const delta = prevBudgeted + prevSumAmount;
+  if (delta === 0) {
+    return;
+  }
+
+  const currentBudget = await getSheetValue(
+    monthUtils.sheetForMonth(month),
+    'budget-' + category,
+  );
+
+  await batchMessages(async () => {
+    void setBudget({
+      category,
+      month,
+      amount: currentBudget + delta,
+    });
+  });
+}
+
+/**
+ * Apply `carryOverFromPrevious` for every visible spend category.
+ */
+export async function carryOverFromPreviousMonth({
+  month,
+}: {
+  month: string;
+}): Promise<void> {
+  const categories = await db.all<db.DbViewCategoryWithGroupHidden>(
+    `
+    SELECT c.*
+    FROM categories c
+    LEFT JOIN category_groups g ON c.cat_group = g.id
+    WHERE c.tombstone = 0 AND c.hidden = 0 AND g.hidden = 0
+    `,
+  );
+
+  const prevMonth = monthUtils.prevMonth(month);
+  const prevSheet = monthUtils.sheetForMonth(prevMonth);
+  const currentSheet = monthUtils.sheetForMonth(month);
+
+  await batchMessages(async () => {
+    for (const cat of categories) {
+      if (cat.is_income === 1) {
+        continue;
+      }
+      const prevBudgeted = await getSheetValue(prevSheet, 'budget-' + cat.id);
+      const prevSumAmount = await getSheetValue(
+        prevSheet,
+        'sum-amount-' + cat.id,
+      );
+      const delta = prevBudgeted + prevSumAmount;
+      if (delta === 0) {
+        continue;
+      }
+      const currentBudget = await getSheetValue(
+        currentSheet,
+        'budget-' + cat.id,
+      );
+      void setBudget({
+        category: cat.id,
+        month,
+        amount: currentBudget + delta,
+      });
+    }
+  });
+}
+
 export async function setNMonthAvg({
   month,
   N,

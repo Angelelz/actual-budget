@@ -647,6 +647,30 @@ type ApplyBudgetActionPayload =
       args: {
         category: CategoryEntity['id'];
       };
+    }
+  | {
+      type: 'set-long-term';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
+      type: 'set-long-term-month';
+      month: string;
+      args?: never;
+    }
+  | {
+      type: 'carry-over-prev';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
+      type: 'carry-over-prev-month';
+      month: string;
+      args?: never;
     };
 
 export function useBudgetActions() {
@@ -775,6 +799,24 @@ export function useBudgetActions() {
             month,
             category: args.category,
           });
+          return null;
+        case 'set-long-term':
+          await send('budget/set-long-term', {
+            month,
+            category: args.category,
+          });
+          return null;
+        case 'set-long-term-month':
+          await send('budget/set-long-term-month', { month });
+          return null;
+        case 'carry-over-prev':
+          await send('budget/carry-over-from-previous', {
+            month,
+            category: args.category,
+          });
+          return null;
+        case 'carry-over-prev-month':
+          await send('budget/carry-over-from-previous-month', { month });
           return null;
         default:
           throw new Error(`Unknown budget action type: ${String(type)}`);

@@ -317,6 +317,7 @@ export const CategoryMonth = memo(function CategoryMonth({
                 placement="bottom start"
               >
                 <BudgetMenu
+                  isIncome={!!category.is_income}
                   onCopyLastMonthAverage={() => {
                     onMenuAction(month, 'copy-single-last', {
                       category: category.id,
@@ -350,6 +351,28 @@ export const CategoryMonth = memo(function CategoryMonth({
                     });
                     showUndoNotification({
                       message: t(`Budget template applied.`),
+                    });
+                  }}
+                  onSetLongTerm={() => {
+                    onMenuAction(month, 'set-long-term', {
+                      category: category.id,
+                    });
+                    showUndoNotification({
+                      message: t(
+                        'Budget for {{categoryName}} copied forward.',
+                        { categoryName: category.name },
+                      ),
+                    });
+                  }}
+                  onCarryOverFromPrevious={() => {
+                    onMenuAction(month, 'carry-over-prev', {
+                      category: category.id,
+                    });
+                    showUndoNotification({
+                      message: t(
+                        "Last month's leftover for {{categoryName}} carried over.",
+                        { categoryName: category.name },
+                      ),
                     });
                   }}
                 />

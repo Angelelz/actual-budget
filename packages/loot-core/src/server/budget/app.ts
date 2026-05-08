@@ -42,6 +42,10 @@ export type BudgetHandlers = {
   'budget/transfer-category': typeof actions.transferCategory;
   'budget/set-carryover': typeof actions.setCategoryCarryover;
   'budget/reset-income-carryover': typeof actions.resetIncomeCarryover;
+  'budget/set-long-term': typeof actions.setLongTerm;
+  'budget/set-long-term-month': typeof actions.setLongTermMonth;
+  'budget/carry-over-from-previous': typeof actions.carryOverFromPrevious;
+  'budget/carry-over-from-previous-month': typeof actions.carryOverFromPreviousMonth;
   'get-categories': typeof getCategories;
   'get-budget-bounds': typeof getBudgetBounds;
   'envelope-budget-month': typeof envelopeBudgetMonth;
@@ -131,6 +135,19 @@ app.method(
 app.method(
   'budget/reset-income-carryover',
   mutator(undoable(actions.resetIncomeCarryover)),
+);
+app.method('budget/set-long-term', mutator(undoable(actions.setLongTerm)));
+app.method(
+  'budget/set-long-term-month',
+  mutator(undoable(actions.setLongTermMonth)),
+);
+app.method(
+  'budget/carry-over-from-previous',
+  mutator(undoable(actions.carryOverFromPrevious)),
+);
+app.method(
+  'budget/carry-over-from-previous-month',
+  mutator(undoable(actions.carryOverFromPreviousMonth)),
 );
 app.method('get-categories', getCategories);
 app.method('get-budget-bounds', getBudgetBounds);

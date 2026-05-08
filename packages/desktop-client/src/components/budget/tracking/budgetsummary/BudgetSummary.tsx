@@ -224,6 +224,26 @@ export function BudgetSummary({ month }: BudgetSummaryProps) {
                       ),
                     });
                   }}
+                  onSetMonthAsLongTerm={() => {
+                    onBudgetAction(month, 'set-long-term-month');
+                    onMenuClose();
+                    showUndoNotification({
+                      message: t(
+                        '{{displayMonth}} spend budgets copied forward as long-term.',
+                        { displayMonth },
+                      ),
+                    });
+                  }}
+                  onCarryOverFromPreviousMonth={() => {
+                    onBudgetAction(month, 'carry-over-prev-month');
+                    onMenuClose();
+                    showUndoNotification({
+                      message: t(
+                        "Last month's savings carried over into {{displayMonth}}.",
+                        { displayMonth },
+                      ),
+                    });
+                  }}
                 />
               </Popover>
             </View>

@@ -3,6 +3,7 @@ import type { ComponentPropsWithoutRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Menu } from '@actual-app/components/menu';
+import type { MenuItem } from '@actual-app/components/menu';
 
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 
@@ -16,6 +17,8 @@ type BudgetMonthMenuProps = Omit<
   onCheckTemplates: () => void;
   onApplyBudgetTemplates: () => void;
   onOverwriteWithBudgetTemplates: () => void;
+  onSetMonthAsLongTerm?: () => void;
+  onCarryOverFromPreviousMonth?: () => void;
 };
 
 export function BudgetMonthMenu({
@@ -25,10 +28,41 @@ export function BudgetMonthMenu({
   onCheckTemplates,
   onApplyBudgetTemplates,
   onOverwriteWithBudgetTemplates,
+  onSetMonthAsLongTerm,
+  onCarryOverFromPreviousMonth,
   ...props
 }: BudgetMonthMenuProps) {
   const { t } = useTranslation();
   const isGoalTemplatesEnabled = useFeatureFlag('goalTemplatesEnabled');
+
+  const items: MenuItem[] = [
+    { name: 'copy-last', text: t("Copy last month's budget") },
+    { name: 'set-zero', text: t('Set budgets to zero') },
+    { name: 'set-3-avg', text: t('Set budgets to 3 month average') },
+    { name: 'set-6-avg', text: t('Set budgets to 6 month average') },
+    { name: 'set-12-avg', text: t('Set budgets to 12 month average') },
+    Menu.line,
+    {
+      name: 'set-long-term-month',
+      text: t('Set this month as long-term (spend only)'),
+    },
+    {
+      name: 'carry-over-prev-month',
+      text: t('Carry over savings from last month (spend only)'),
+    },
+  ];
+
+  if (isGoalTemplatesEnabled) {
+    items.push(
+      { name: 'check-templates', text: t('Check templates') },
+      { name: 'apply-goal-template', text: t('Apply budget template') },
+      {
+        name: 'overwrite-goal-template',
+        text: t('Overwrite with budget template'),
+      },
+    );
+  }
+
   return (
     <Menu
       {...props}
@@ -49,6 +83,12 @@ export function BudgetMonthMenu({
           case 'set-12-avg':
             onSetMonthsAverage(12);
             break;
+          case 'set-long-term-month':
+            onSetMonthAsLongTerm?.();
+            break;
+          case 'carry-over-prev-month':
+            onCarryOverFromPreviousMonth?.();
+            break;
           case 'check-templates':
             onCheckTemplates();
             break;
@@ -62,38 +102,7 @@ export function BudgetMonthMenu({
             throw new Error(`Unrecognized menu option: ${name}`);
         }
       }}
-      items={[
-        { name: 'copy-last', text: t("Copy last month's budget") },
-        { name: 'set-zero', text: t('Set budgets to zero') },
-        {
-          name: 'set-3-avg',
-          text: t('Set budgets to 3 month average'),
-        },
-        {
-          name: 'set-6-avg',
-          text: t('Set budgets to 6 month average'),
-        },
-        {
-          name: 'set-12-avg',
-          text: t('Set budgets to 12 month average'),
-        },
-        ...(isGoalTemplatesEnabled
-          ? [
-              {
-                name: 'check-templates',
-                text: t('Check templates'),
-              },
-              {
-                name: 'apply-goal-template',
-                text: t('Apply budget template'),
-              },
-              {
-                name: 'overwrite-goal-template',
-                text: t('Overwrite with budget template'),
-              },
-            ]
-          : []),
-      ]}
+      items={items}
     />
   );
 }
