@@ -59,6 +59,7 @@ type ScheduleEditAction =
       field: 'posts_transaction';
       value: boolean;
     }
+  // Fork: schedule auto-budgeting
   | {
       type: 'set-field';
       field: 'auto_budget_category';

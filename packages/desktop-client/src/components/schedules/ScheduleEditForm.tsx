@@ -33,6 +33,8 @@ import { useLocale } from '#hooks/useLocale';
 import { SelectedProvider } from '#hooks/useSelected';
 import type { Actions } from '#hooks/useSelected';
 
+import { ScheduleAutoBudgetField } from './ScheduleAutoBudgetField';
+
 export type ScheduleFormFields = {
   payee: null | string;
   account: null | string;
@@ -42,6 +44,7 @@ export type ScheduleFormFields = {
   posts_transaction: boolean;
   custom_upcoming_length: null | string;
   name: null | string;
+  // Fork: schedule auto-budgeting (see ./ScheduleAutoBudgetField)
   auto_budget_category: null | string;
 };
 
@@ -71,6 +74,7 @@ export type ScheduleEditFormDispatch =
       field: 'posts_transaction';
       value: boolean;
     }
+  // Fork: schedule auto-budgeting (see ./ScheduleAutoBudgetField)
   | {
       type: 'set-field';
       field: 'auto_budget_category';
@@ -504,72 +508,17 @@ export function ScheduleEditForm({
             </Trans>
           </Text>
 
-          <View
-            style={{
-              marginTop: 15,
-              flexDirection: 'row',
-              alignItems: 'center',
-              userSelect: 'none',
-              justifyContent: 'flex-end',
-            }}
-          >
-            <Checkbox
-              id="form_auto_budget"
-              checked={fields.auto_budget_category != null}
-              onChange={e => {
-                dispatch({
-                  type: 'set-field',
-                  field: 'auto_budget_category',
-                  value: e.target.checked ? '' : null,
-                });
-              }}
-            />
-            <label htmlFor="form_auto_budget" style={{ userSelect: 'none' }}>
-              <Trans>This is an automatic budget item</Trans>
-            </label>
-          </View>
-
-          {fields.auto_budget_category != null && (
-            <View
-              style={{
-                marginTop: 5,
-                width: 350,
-                alignSelf: 'flex-end',
-              }}
-            >
-              <FormLabel
-                title={t('Budget category')}
-                htmlFor="auto-budget-category-field"
-              />
-              <GenericInput
-                type="id"
-                field="category"
-                value={fields.auto_budget_category || ''}
-                onChange={(id: string) =>
-                  dispatch({
-                    type: 'set-field',
-                    field: 'auto_budget_category',
-                    value: id || null,
-                  })
-                }
-              />
-              <Text
-                style={{
-                  marginTop: 6,
-                  color: theme.pageTextLight,
-                  fontSize: 13,
-                  lineHeight: '1.4em',
-                }}
-              >
-                <Trans>
-                  Each month, this schedule&rsquo;s projected occurrences will
-                  be summed and written into the tracking budget for the
-                  selected category. The budget cell will be read-only — to
-                  change it, edit this schedule.
-                </Trans>
-              </Text>
-            </View>
-          )}
+          {/* Fork seam: auto-budget field lives in ./ScheduleAutoBudgetField */}
+          <ScheduleAutoBudgetField
+            value={fields.auto_budget_category}
+            onChange={value =>
+              dispatch({
+                type: 'set-field',
+                field: 'auto_budget_category',
+                value,
+              })
+            }
+          />
 
           {!adding && schedule.rule && (
             <SpaceBetween style={{ marginTop: 10, alignItems: 'center' }}>

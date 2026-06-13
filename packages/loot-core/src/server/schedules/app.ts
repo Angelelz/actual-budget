@@ -421,6 +421,7 @@ export async function updateSchedule({
     await db.updateWithSchema('schedules', scheduleFields);
   });
 
+  // Fork: schedule-driven auto-income budgeting (see #server/budget/auto-income)
   if (autoBudgetingChanged) {
     try {
       await recomputeAutoIncomeBudgets();
