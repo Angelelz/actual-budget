@@ -7,18 +7,23 @@ import type { MenuItem } from '@actual-app/components/menu';
 
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 
+import {
+  getCustomTrackingBudgetMenuItems,
+  handleCustomBudgetMenuSelect,
+} from './customBudgetMenu';
+import type { CustomBudgetMenuHandlers } from './customBudgetMenu';
+
 type BudgetMenuProps = Omit<
   ComponentPropsWithoutRef<typeof Menu>,
   'onMenuSelect' | 'items'
-> & {
-  isIncome?: boolean;
-  onCopyLastMonthAverage: () => void;
-  onSetMonthsAverage: (numberOfMonths: number) => void;
-  onApplyBudgetTemplate: () => void;
-  onSetLongTerm?: () => void;
-  onCarryOverFromPrevious?: () => void;
-  onCopyUntilYearEnd: () => void;
-};
+> &
+  CustomBudgetMenuHandlers & {
+    isIncome?: boolean;
+    onCopyLastMonthAverage: () => void;
+    onSetMonthsAverage: (numberOfMonths: number) => void;
+    onApplyBudgetTemplate: () => void;
+    onCopyUntilYearEnd: () => void;
+  };
 export function BudgetMenu({
   isIncome = false,
   onCopyLastMonthAverage,
@@ -48,17 +53,19 @@ export function BudgetMenu({
       case 'apply-single-category-template':
         onApplyBudgetTemplate?.();
         break;
-      case 'set-long-term':
-        onSetLongTerm?.();
-        break;
-      case 'carry-over-prev':
-        onCarryOverFromPrevious?.();
-        break;
       case 'copy-until-year-end':
         onCopyUntilYearEnd?.();
         break;
       default:
-        throw new Error(`Unrecognized menu item: ${name}`);
+        // Fork seam: tracking-budget items handled in ./customBudgetMenu.
+        if (
+          !handleCustomBudgetMenuSelect(name, {
+            onSetLongTerm,
+            onCarryOverFromPrevious,
+          })
+        ) {
+          throw new Error(`Unrecognized menu item: ${name}`);
+        }
     }
   };
 
@@ -85,13 +92,8 @@ export function BudgetMenu({
     },
   ];
 
-  if (!isIncome) {
-    items.push(
-      Menu.line,
-      { name: 'set-long-term', text: t('Set as long-term') },
-      { name: 'carry-over-prev', text: t('Carry over from last month') },
-    );
-  }
+  // Fork seam: tracking-budget items provided by ./customBudgetMenu.
+  items.push(...getCustomTrackingBudgetMenuItems({ isIncome, t }));
 
   if (isGoalTemplatesEnabled) {
     items.push({

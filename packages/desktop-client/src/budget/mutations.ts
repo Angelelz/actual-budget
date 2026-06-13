@@ -16,6 +16,8 @@ import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 import type { AppDispatch } from '#redux/store';
 
+import { applyCustomBudgetAction } from './customBudgetActions';
+import type { CustomBudgetActionPayload } from './customBudgetActions';
 import { categoryQueries } from './queries';
 
 function invalidateQueries(queryClient: QueryClient, queryKey?: QueryKey) {
@@ -517,7 +519,7 @@ export function useSortCategoriesMutation() {
   });
 }
 
-type ApplyBudgetActionPayload =
+export type ApplyBudgetActionPayload =
   | {
       type: 'budget-amount';
       month: string;
@@ -676,43 +678,27 @@ type ApplyBudgetActionPayload =
       };
     }
   | {
-      type: 'set-long-term';
-      month: string;
-      args: {
-        category: CategoryEntity['id'];
-      };
-    }
-  | {
       type: 'copy-until-year-end';
       month: string;
       args: {
         category: CategoryEntity['id'];
       };
     }
-  | {
-      type: 'set-long-term-month';
-      month: string;
-      args?: never;
-    }
-  | {
-      type: 'carry-over-prev';
-      month: string;
-      args: {
-        category: CategoryEntity['id'];
-      };
-    }
-  | {
-      type: 'carry-over-prev-month';
-      month: string;
-      args?: never;
-    };
+  // Fork: tracking-budget actions live in ./customBudgetActions
+  | CustomBudgetActionPayload;
 
 export function useBudgetActions() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async ({ month, type, args }: ApplyBudgetActionPayload) => {
+    mutationFn: async (payload: ApplyBudgetActionPayload) => {
+      // Fork seam: tracking-budget actions are dispatched in ./customBudgetActions.
+      if (await applyCustomBudgetAction(payload)) {
+        return null;
+      }
+
+      const { month, type, args } = payload;
       switch (type) {
         case 'budget-amount':
           await send('budget/budget-amount', {
@@ -834,29 +820,11 @@ export function useBudgetActions() {
             category: args.category,
           });
           return null;
-        case 'set-long-term':
-          await send('budget/set-long-term', {
-            month,
-            category: args.category,
-          });
-          return null;
         case 'copy-until-year-end':
           await send('budget/copy-until-year-end', {
             month,
             category: args.category,
           });
-          return null;
-        case 'set-long-term-month':
-          await send('budget/set-long-term-month', { month });
-          return null;
-        case 'carry-over-prev':
-          await send('budget/carry-over-from-previous', {
-            month,
-            category: args.category,
-          });
-          return null;
-        case 'carry-over-prev-month':
-          await send('budget/carry-over-from-previous-month', { month });
           return null;
         default:
           throw new Error(`Unknown budget action type: ${String(type)}`);
