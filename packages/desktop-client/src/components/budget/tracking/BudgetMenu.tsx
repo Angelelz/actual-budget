@@ -17,6 +17,7 @@ type BudgetMenuProps = Omit<
   onApplyBudgetTemplate: () => void;
   onSetLongTerm?: () => void;
   onCarryOverFromPrevious?: () => void;
+  onCopyUntilYearEnd: () => void;
 };
 export function BudgetMenu({
   isIncome = false,
@@ -25,6 +26,7 @@ export function BudgetMenu({
   onApplyBudgetTemplate,
   onSetLongTerm,
   onCarryOverFromPrevious,
+  onCopyUntilYearEnd,
   ...props
 }: BudgetMenuProps) {
   const { t } = useTranslation();
@@ -52,6 +54,9 @@ export function BudgetMenu({
       case 'carry-over-prev':
         onCarryOverFromPrevious?.();
         break;
+      case 'copy-until-year-end':
+        onCopyUntilYearEnd?.();
+        break;
       default:
         throw new Error(`Unrecognized menu item: ${name}`);
     }
@@ -73,6 +78,10 @@ export function BudgetMenu({
     {
       name: 'set-single-12-avg',
       text: t('Set to yearly average'),
+    },
+    {
+      name: 'copy-until-year-end',
+      text: t('Copy until year end'),
     },
   ];
 

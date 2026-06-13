@@ -375,6 +375,14 @@ export const CategoryMonth = memo(function CategoryMonth({
                       ),
                     });
                   }}
+                  onCopyUntilYearEnd={() => {
+                    onMenuAction(month, 'copy-until-year-end', {
+                      category: category.id,
+                    });
+                    showUndoNotification({
+                      message: t(`Budget copied until year end.`),
+                    });
+                  }}
                 />
               </Popover>
             </View>

@@ -9,6 +9,7 @@ import type {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
+import { v4 as uuidv4 } from 'uuid';
 
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
@@ -31,7 +32,7 @@ function dispatchErrorNotification(
   dispatch(
     addNotification({
       notification: {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         type: 'error',
         message,
         pre: error ? error.message : undefined,
@@ -490,6 +491,32 @@ export function useReorderCategoryGroupMutation() {
   });
 }
 
+type SortCategoriesPayload = {
+  groupId: CategoryGroupEntity['id'];
+  direction: 'asc' | 'desc';
+};
+
+export function useSortCategoriesMutation() {
+  const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: async ({ groupId, direction }: SortCategoriesPayload) => {
+      await send('categories-sort', { groupId, direction });
+    },
+    onSuccess: () => invalidateQueries(queryClient),
+    onError: error => {
+      console.error('Error sorting categories:', error);
+      dispatchErrorNotification(
+        dispatch,
+        t('There was an error sorting the categories. Please try again.'),
+        error,
+      );
+    },
+  });
+}
+
 type ApplyBudgetActionPayload =
   | {
       type: 'budget-amount';
@@ -656,6 +683,13 @@ type ApplyBudgetActionPayload =
       };
     }
   | {
+      type: 'copy-until-year-end';
+      month: string;
+      args: {
+        category: CategoryEntity['id'];
+      };
+    }
+  | {
       type: 'set-long-term-month';
       month: string;
       args?: never;
@@ -802,6 +836,12 @@ export function useBudgetActions() {
           return null;
         case 'set-long-term':
           await send('budget/set-long-term', {
+            month,
+            category: args.category,
+          });
+          return null;
+        case 'copy-until-year-end':
+          await send('budget/copy-until-year-end', {
             month,
             category: args.category,
           });
