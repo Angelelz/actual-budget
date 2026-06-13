@@ -51,6 +51,7 @@ export function PrimaryButtons() {
     <View style={{ flexShrink: 0 }}>
       <Item title={t('Budget')} Icon={SvgWallet} to="/budget" />
       <Item title={t('Reports')} Icon={SvgReports} to="/reports" />
+      {/* Fork: debt-projection report nav entry */}
       <SecondaryItem
         title={t('Debt projection')}
         Icon={SvgChartBar}

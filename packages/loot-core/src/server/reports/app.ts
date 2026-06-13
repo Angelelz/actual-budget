@@ -180,6 +180,7 @@ export type ReportsHandlers = {
   'report/create': typeof createReport;
   'report/update': typeof updateReport;
   'report/delete': typeof deleteReport;
+  // Fork: debt-projection report (see ./debt-projection)
   'report/debt-projection': typeof computeDebtProjection;
 };
 
@@ -190,4 +191,5 @@ app.method('report/get', getReports);
 app.method('report/create', mutator(undoable(createReport)));
 app.method('report/update', mutator(undoable(updateReport)));
 app.method('report/delete', mutator(undoable(deleteReport)));
+// Fork: debt-projection report (see ./debt-projection)
 app.method('report/debt-projection', computeDebtProjection);

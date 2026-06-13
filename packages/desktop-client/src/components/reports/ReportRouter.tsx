@@ -110,6 +110,7 @@ export function ReportRouter() {
           </ReportBoundary>
         }
       />
+      {/* Fork: debt-projection report (see ./reports/DebtProjection) */}
       <Route
         path="/debt-projection"
         element={
