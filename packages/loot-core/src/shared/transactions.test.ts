@@ -1,4 +1,5 @@
 // @ts-strict-ignore
+import { v4 as uuidv4 } from 'uuid';
 
 import type { TransactionEntity } from '#types/models';
 
@@ -13,7 +14,7 @@ import {
 
 function makeTransaction(data: Partial<TransactionEntity>): TransactionEntity {
   return {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     amount: 2422,
     date: '2020-01-05',
     account: 'acc-id-1',
@@ -113,7 +114,7 @@ describe('Transactions', () => {
 
   test('splitting a transaction works', () => {
     const transactions = [
-      makeTransaction({ id: 't1', amount: 5000 }),
+      makeTransaction({ id: 't1', amount: 5000, payee: 'payee-id' }),
       makeTransaction({ amount: 3000 }),
     ];
     const { data, diff } = splitTransaction(transactions, 't1');
@@ -126,6 +127,7 @@ describe('Transactions', () => {
         {
           id: 't1',
           is_parent: true,
+          payee: null,
           error: splitError(5000),
         },
       ],
@@ -135,8 +137,13 @@ describe('Transactions', () => {
         id: 't1',
         amount: 5000,
         error: splitError(5000),
+        payee: null,
       }),
-      expect.objectContaining({ parent_id: 't1', amount: 0 }),
+      expect.objectContaining({
+        parent_id: 't1',
+        amount: 0,
+        payee: 'payee-id',
+      }),
       expect.objectContaining({ amount: 3000 }),
     ]);
   });
@@ -170,6 +177,24 @@ describe('Transactions', () => {
       updated: [],
     });
     expect(data.length).toBe(6);
+  });
+
+  test('adding a split transaction reuses the previous child payee', () => {
+    const transactions = [
+      ...makeSplitTransaction({ id: 't1', amount: 2500, payee: null }, [
+        { id: 't2', amount: 2000, payee: 'payee-id' },
+      ]),
+    ];
+
+    const { diff } = addSplitTransaction(transactions, 't1');
+
+    expect(diff.added).toEqual([
+      expect.objectContaining({
+        amount: 0,
+        parent_id: 't1',
+        payee: 'payee-id',
+      }),
+    ]);
   });
 
   test('updating a split transaction works', () => {
@@ -279,6 +304,34 @@ describe('Transactions', () => {
       expect.objectContaining({ amount: 2500, error: null }),
       expect.objectContaining({ amount: 3002 }),
     ]);
+  });
+
+  test('unlocking a reconciled split transaction propagates to children', () => {
+    const transactions = [
+      makeTransaction({ amount: 2001 }),
+      ...makeSplitTransaction({ id: 't1', amount: 2500, reconciled: true }, [
+        { id: 't2', amount: 2000, reconciled: true },
+        { id: 't3', amount: 500, reconciled: true },
+      ]),
+      makeTransaction({ amount: 3002 }),
+    ];
+
+    const { data, diff } = updateTransaction(transactions, {
+      ...transactions.find(t => t.id === 't1')!,
+      reconciled: false,
+    });
+
+    const children = data.filter(t => t.parent_id === 't1');
+    expect(children).toHaveLength(2);
+    expect(children.every(t => t.reconciled === false)).toBe(true);
+
+    expect(diff.updated).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 't1', reconciled: false }),
+        expect.objectContaining({ id: 't2', reconciled: false }),
+        expect.objectContaining({ id: 't3', reconciled: false }),
+      ]),
+    );
   });
 
   test('unsplitting last remaining child converts parent to regular transaction', () => {

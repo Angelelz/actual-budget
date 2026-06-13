@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import { createApp } from '#server/app';
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
@@ -46,6 +48,7 @@ export const reportModel = {
       showHiddenCategories: row.show_hidden === 1,
       showUncategorized: row.show_uncategorized === 1,
       trimIntervals: row.trim_intervals === 1,
+      showTrendLines: row.show_trend_lines === 1,
       includeCurrentInterval: row.include_current === 1,
       graphType: row.graph_type,
       conditions: row.conditions ?? [],
@@ -72,6 +75,7 @@ export const reportModel = {
       show_hidden: report.showHiddenCategories ? 1 : 0,
       show_uncategorized: report.showUncategorized ? 1 : 0,
       trim_intervals: report.trimIntervals ? 1 : 0,
+      show_trend_lines: report.showTrendLines ? 1 : 0,
       include_current: report.includeCurrentInterval ? 1 : 0,
       graph_type: report.graphType,
       conditions: report.conditions,
@@ -130,7 +134,7 @@ async function reportNameExists(
 }
 
 async function createReport(report: CustomReportEntity) {
-  const reportId = crypto.randomUUID();
+  const reportId = uuidv4();
   const item: CustomReportEntity = {
     ...report,
     id: reportId,
@@ -176,6 +180,7 @@ export type ReportsHandlers = {
   'report/create': typeof createReport;
   'report/update': typeof updateReport;
   'report/delete': typeof deleteReport;
+  // Fork: debt-projection report (see ./debt-projection)
   'report/debt-projection': typeof computeDebtProjection;
 };
 
@@ -186,4 +191,5 @@ app.method('report/get', getReports);
 app.method('report/create', mutator(undoable(createReport)));
 app.method('report/update', mutator(undoable(updateReport)));
 app.method('report/delete', mutator(undoable(deleteReport)));
+// Fork: debt-projection report (see ./debt-projection)
 app.method('report/debt-projection', computeDebtProjection);

@@ -6,6 +6,7 @@ import { Button } from '@actual-app/components/button';
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { InitialFocus } from '@actual-app/components/initial-focus';
 import { Input } from '@actual-app/components/input';
+import { Select } from '@actual-app/components/select';
 import { SpaceBetween } from '@actual-app/components/space-between';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
@@ -20,6 +21,7 @@ import type {
 
 import { Checkbox, FormField, FormLabel } from '#components/forms';
 import { OpSelect } from '#components/rules/RuleEditor';
+import { CustomUpcomingLength } from '#components/schedules/CustomUpcomingLength';
 import { DateSelect } from '#components/select/DateSelect';
 import { RecurringSchedulePicker } from '#components/select/RecurringSchedulePicker';
 import { SelectedItemsButton } from '#components/table';
@@ -31,6 +33,8 @@ import { useLocale } from '#hooks/useLocale';
 import { SelectedProvider } from '#hooks/useSelected';
 import type { Actions } from '#hooks/useSelected';
 
+import { ScheduleAutoBudgetField } from './ScheduleAutoBudgetField';
+
 export type ScheduleFormFields = {
   payee: null | string;
   account: null | string;
@@ -38,7 +42,9 @@ export type ScheduleFormFields = {
   amountOp: null | string;
   date: null | string | RecurConfig;
   posts_transaction: boolean;
+  custom_upcoming_length: null | string;
   name: null | string;
+  // Fork: schedule auto-budgeting (see ./ScheduleAutoBudgetField)
   auto_budget_category: null | string;
 };
 
@@ -68,9 +74,15 @@ export type ScheduleEditFormDispatch =
       field: 'posts_transaction';
       value: boolean;
     }
+  // Fork: schedule auto-budgeting (see ./ScheduleAutoBudgetField)
   | {
       type: 'set-field';
       field: 'auto_budget_category';
+      value: string | null;
+    }
+  | {
+      type: 'set-field';
+      field: 'custom_upcoming_length';
       value: string | null;
     }
   | {
@@ -120,7 +132,7 @@ export function ScheduleEditForm({
 
   return (
     <>
-      <View style={{ display: 'block', overflow: 'scroll', padding: 10 }}>
+      <View style={{ display: 'block', overflow: 'auto', padding: 10 }}>
         <SpaceBetween style={{ marginTop: 10 }}>
           <FormField style={{ flex: 1 }}>
             <FormLabel title={t('Schedule Name')} htmlFor="name-field" />
@@ -316,6 +328,138 @@ export function ScheduleEditForm({
         </SpaceBetween>
 
         <SpaceBetween
+          style={{
+            marginTop: 20,
+            display: isNarrowWidth ? 'grid' : 'flex',
+            gridTemplateColumns: '1fr 1fr',
+          }}
+        >
+          <FormField style={{ flex: 1 }}>
+            <FormLabel
+              title={t('Upcoming length')}
+              htmlFor="upcoming-length-field"
+            />
+            {(() => {
+              const presetValues = ['1', '7', '14', 'oneMonth', 'currentMonth'];
+              const isPreset =
+                fields.custom_upcoming_length != null &&
+                presetValues.includes(fields.custom_upcoming_length);
+              const isCustomValue =
+                fields.custom_upcoming_length != null && !isPreset;
+              const isValidCustomFormat =
+                fields.custom_upcoming_length != null &&
+                /^[1-9]\d*-(day|week|month|year)$/.test(
+                  fields.custom_upcoming_length,
+                );
+              const safeCustomValue =
+                isCustomValue && isValidCustomFormat
+                  ? fields.custom_upcoming_length
+                  : '1-day';
+
+              return (
+                <>
+                  <Select
+                    id="upcoming-length-field"
+                    options={[
+                      ['', t('Use global default')],
+                      ['1', t('1 day')],
+                      ['7', t('1 week')],
+                      ['14', t('2 weeks')],
+                      ['oneMonth', t('1 month')],
+                      ['currentMonth', t('End of the current month')],
+                      ['custom', t('Custom length')],
+                    ]}
+                    value={
+                      fields.custom_upcoming_length == null
+                        ? ''
+                        : isPreset
+                          ? fields.custom_upcoming_length
+                          : 'custom'
+                    }
+                    onChange={value => {
+                      dispatch({
+                        type: 'set-field',
+                        field: 'custom_upcoming_length',
+                        value:
+                          value === ''
+                            ? null
+                            : value === 'custom'
+                              ? '1-day'
+                              : value,
+                      });
+                    }}
+                  />
+                  {isCustomValue && (
+                    <CustomUpcomingLength
+                      tempValue={safeCustomValue}
+                      onChange={value => {
+                        dispatch({
+                          type: 'set-field',
+                          field: 'custom_upcoming_length',
+                          value,
+                        });
+                      }}
+                    />
+                  )}
+                </>
+              );
+            })()}
+            <Text
+              style={{
+                color: theme.pageTextLight,
+                fontSize: 12,
+                marginTop: 3,
+              }}
+            >
+              <Trans>
+                How far in advance this schedule appears as upcoming
+              </Trans>
+            </Text>
+          </FormField>
+
+          <FormField style={{ flex: 1 }}>
+            <FormLabel title=" " />
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                userSelect: 'none',
+                minHeight: 28,
+              }}
+            >
+              <Checkbox
+                id="form_posts_transaction"
+                checked={fields.posts_transaction}
+                onChange={e => {
+                  dispatch({
+                    type: 'set-field',
+                    field: 'posts_transaction',
+                    value: e.target.checked,
+                  });
+                }}
+              />
+              <label
+                htmlFor="form_posts_transaction"
+                style={{ userSelect: 'none' }}
+              >
+                <Trans>Automatically add transaction</Trans>
+              </label>
+            </View>
+            <Text
+              style={{
+                color: theme.pageTextLight,
+                fontSize: 12,
+                marginTop: 3,
+              }}
+            >
+              <Trans>
+                Automatically create transactions in the specified account
+              </Trans>
+            </Text>
+          </FormField>
+        </SpaceBetween>
+
+        <SpaceBetween
           gap={5}
           direction="vertical"
           align="end"
@@ -364,75 +508,20 @@ export function ScheduleEditForm({
             </Trans>
           </Text>
 
-          <View
-            style={{
-              marginTop: 15,
-              flexDirection: 'row',
-              alignItems: 'center',
-              userSelect: 'none',
-              justifyContent: 'flex-end',
-            }}
-          >
-            <Checkbox
-              id="form_auto_budget"
-              checked={fields.auto_budget_category != null}
-              onChange={e => {
-                dispatch({
-                  type: 'set-field',
-                  field: 'auto_budget_category',
-                  value: e.target.checked ? '' : null,
-                });
-              }}
-            />
-            <label htmlFor="form_auto_budget" style={{ userSelect: 'none' }}>
-              <Trans>This is an automatic budget item</Trans>
-            </label>
-          </View>
-
-          {fields.auto_budget_category != null && (
-            <View
-              style={{
-                marginTop: 5,
-                width: 350,
-                alignSelf: 'flex-end',
-              }}
-            >
-              <FormLabel
-                title={t('Budget category')}
-                htmlFor="auto-budget-category-field"
-              />
-              <GenericInput
-                type="id"
-                field="category"
-                value={fields.auto_budget_category || ''}
-                onChange={(id: string) =>
-                  dispatch({
-                    type: 'set-field',
-                    field: 'auto_budget_category',
-                    value: id || null,
-                  })
-                }
-              />
-              <Text
-                style={{
-                  marginTop: 6,
-                  color: theme.pageTextLight,
-                  fontSize: 13,
-                  lineHeight: '1.4em',
-                }}
-              >
-                <Trans>
-                  Each month, this schedule&rsquo;s projected occurrences will
-                  be summed and written into the tracking budget for the
-                  selected category. The budget cell will be read-only — to
-                  change it, edit this schedule.
-                </Trans>
-              </Text>
-            </View>
-          )}
+          {/* Fork seam: auto-budget field lives in ./ScheduleAutoBudgetField */}
+          <ScheduleAutoBudgetField
+            value={fields.auto_budget_category}
+            onChange={value =>
+              dispatch({
+                type: 'set-field',
+                field: 'auto_budget_category',
+                value,
+              })
+            }
+          />
 
           {!adding && schedule.rule && (
-            <SpaceBetween style={{ marginTop: 20, alignItems: 'center' }}>
+            <SpaceBetween style={{ marginTop: 10, alignItems: 'center' }}>
               {isCustom && (
                 <Text
                   style={{

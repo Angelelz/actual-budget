@@ -5,7 +5,6 @@ import type { Query } from '@actual-app/core/shared/query';
 import {
   getHasTransactionsQuery,
   getStatus,
-  getStatusLabel,
 } from '@actual-app/core/shared/schedules';
 import type { ScheduleStatuses } from '@actual-app/core/shared/schedules';
 import type {
@@ -17,6 +16,7 @@ import type {
 import { accountFilter } from '#queries';
 import { liveQuery } from '#queries/liveQuery';
 import type { LiveQuery } from '#queries/liveQuery';
+import { getStatusLabel } from '#util/schedule';
 
 import { useSyncedPref } from './useSyncedPref';
 
@@ -42,7 +42,7 @@ function loadStatuses(
             s.next_date,
             s.completed,
             hasTrans.has(s.id),
-            upcomingLength,
+            s.custom_upcoming_length ?? upcomingLength,
           ),
         ]),
       ) as ScheduleStatuses;

@@ -36,6 +36,7 @@ import type { CategoryGroupMonthProps, CategoryMonthProps } from '..';
 
 import { BalanceMenu } from './BalanceMenu';
 import { BudgetMenu } from './BudgetMenu';
+import { getCustomTrackingBudgetMenuCallbacks } from './customBudgetMenu';
 
 export const useTrackingSheetValue = <
   FieldName extends SheetFields<'tracking-budget'>,
@@ -353,26 +354,20 @@ export const CategoryMonth = memo(function CategoryMonth({
                       message: t(`Budget template applied.`),
                     });
                   }}
-                  onSetLongTerm={() => {
-                    onMenuAction(month, 'set-long-term', {
+                  // Fork seam: tracking-budget callbacks from ./customBudgetMenu.
+                  {...getCustomTrackingBudgetMenuCallbacks({
+                    month,
+                    category,
+                    onMenuAction,
+                    showUndoNotification,
+                    t,
+                  })}
+                  onCopyUntilYearEnd={() => {
+                    onMenuAction(month, 'copy-until-year-end', {
                       category: category.id,
                     });
                     showUndoNotification({
-                      message: t(
-                        'Budget for {{categoryName}} copied forward.',
-                        { categoryName: category.name },
-                      ),
-                    });
-                  }}
-                  onCarryOverFromPrevious={() => {
-                    onMenuAction(month, 'carry-over-prev', {
-                      category: category.id,
-                    });
-                    showUndoNotification({
-                      message: t(
-                        "Last month's leftover for {{categoryName}} carried over.",
-                        { categoryName: category.name },
-                      ),
+                      message: t(`Budget copied until year end.`),
                     });
                   }}
                 />

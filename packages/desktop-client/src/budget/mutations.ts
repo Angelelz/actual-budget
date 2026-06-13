@@ -9,12 +9,15 @@ import type {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
+import { v4 as uuidv4 } from 'uuid';
 
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 import type { AppDispatch } from '#redux/store';
 
+import { applyCustomBudgetAction } from './customBudgetActions';
+import type { CustomBudgetActionPayload } from './customBudgetActions';
 import { categoryQueries } from './queries';
 
 function invalidateQueries(queryClient: QueryClient, queryKey?: QueryKey) {
@@ -31,7 +34,7 @@ function dispatchErrorNotification(
   dispatch(
     addNotification({
       notification: {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         type: 'error',
         message,
         pre: error ? error.message : undefined,
@@ -490,7 +493,33 @@ export function useReorderCategoryGroupMutation() {
   });
 }
 
-type ApplyBudgetActionPayload =
+type SortCategoriesPayload = {
+  groupId: CategoryGroupEntity['id'];
+  direction: 'asc' | 'desc';
+};
+
+export function useSortCategoriesMutation() {
+  const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: async ({ groupId, direction }: SortCategoriesPayload) => {
+      await send('categories-sort', { groupId, direction });
+    },
+    onSuccess: () => invalidateQueries(queryClient),
+    onError: error => {
+      console.error('Error sorting categories:', error);
+      dispatchErrorNotification(
+        dispatch,
+        t('There was an error sorting the categories. Please try again.'),
+        error,
+      );
+    },
+  });
+}
+
+export type ApplyBudgetActionPayload =
   | {
       type: 'budget-amount';
       month: string;
@@ -649,36 +678,27 @@ type ApplyBudgetActionPayload =
       };
     }
   | {
-      type: 'set-long-term';
+      type: 'copy-until-year-end';
       month: string;
       args: {
         category: CategoryEntity['id'];
       };
     }
-  | {
-      type: 'set-long-term-month';
-      month: string;
-      args?: never;
-    }
-  | {
-      type: 'carry-over-prev';
-      month: string;
-      args: {
-        category: CategoryEntity['id'];
-      };
-    }
-  | {
-      type: 'carry-over-prev-month';
-      month: string;
-      args?: never;
-    };
+  // Fork: tracking-budget actions live in ./customBudgetActions
+  | CustomBudgetActionPayload;
 
 export function useBudgetActions() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async ({ month, type, args }: ApplyBudgetActionPayload) => {
+    mutationFn: async (payload: ApplyBudgetActionPayload) => {
+      // Fork seam: tracking-budget actions are dispatched in ./customBudgetActions.
+      if (await applyCustomBudgetAction(payload)) {
+        return null;
+      }
+
+      const { month, type, args } = payload;
       switch (type) {
         case 'budget-amount':
           await send('budget/budget-amount', {
@@ -800,23 +820,11 @@ export function useBudgetActions() {
             category: args.category,
           });
           return null;
-        case 'set-long-term':
-          await send('budget/set-long-term', {
+        case 'copy-until-year-end':
+          await send('budget/copy-until-year-end', {
             month,
             category: args.category,
           });
-          return null;
-        case 'set-long-term-month':
-          await send('budget/set-long-term-month', { month });
-          return null;
-        case 'carry-over-prev':
-          await send('budget/carry-over-from-previous', {
-            month,
-            category: args.category,
-          });
-          return null;
-        case 'carry-over-prev-month':
-          await send('budget/carry-over-from-previous-month', { month });
           return null;
         default:
           throw new Error(`Unknown budget action type: ${String(type)}`);

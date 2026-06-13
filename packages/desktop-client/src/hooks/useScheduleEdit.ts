@@ -59,9 +59,15 @@ type ScheduleEditAction =
       field: 'posts_transaction';
       value: boolean;
     }
+  // Fork: schedule auto-budgeting
   | {
       type: 'set-field';
       field: 'auto_budget_category';
+      value: string | null;
+    }
+  | {
+      type: 'set-field';
+      field: 'custom_upcoming_length';
       value: string | null;
     }
   | {
@@ -114,6 +120,8 @@ function createScheduleEditReducer(useGetScheduledAmount: boolean = false) {
             amountOp: schedule._amountOp || 'isapprox',
             date: schedule._date ?? null,
             posts_transaction: action.schedule.posts_transaction ?? false,
+            custom_upcoming_length:
+              action.schedule.custom_upcoming_length ?? null,
             name: schedule.name ?? null,
             auto_budget_category: schedule.auto_budget_category ?? null,
           },
@@ -261,6 +269,7 @@ export function useScheduleEdit({
       amountOp: null,
       date: null,
       posts_transaction: false,
+      custom_upcoming_length: null,
       name: null,
       auto_budget_category: null,
     },

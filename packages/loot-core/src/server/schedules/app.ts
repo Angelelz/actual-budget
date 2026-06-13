@@ -1,5 +1,6 @@
 // @ts-strict-ignore
 import * as d from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 
 import { captureBreadcrumb } from '#platform/exceptions';
 import * as connection from '#platform/server/connection';
@@ -251,11 +252,16 @@ async function checkIfScheduleExists(name, scheduleId) {
   return true;
 }
 
+function normalizeScheduleName(name) {
+  const trimmedName = name?.trim();
+  return trimmedName || null;
+}
+
 export async function createSchedule({
   schedule = null,
   conditions = [],
 } = {}): Promise<ScheduleEntity['id']> {
-  const scheduleId = schedule?.id || crypto.randomUUID();
+  const scheduleId = schedule?.id || uuidv4();
 
   const { date: dateCond } = extractScheduleConds(conditions);
   if (dateCond == null) {
@@ -267,13 +273,15 @@ export async function createSchedule({
 
   const nextDate = getNextDate(dateCond);
   const nextDateRepr = nextDate ? toDateRepr(nextDate) : null;
-  if (schedule) {
-    if (schedule.name) {
-      if (await checkIfScheduleExists(schedule.name, scheduleId)) {
+  const scheduleFields = schedule && {
+    ...schedule,
+    name: normalizeScheduleName(schedule.name),
+  };
+  if (scheduleFields) {
+    if (scheduleFields.name) {
+      if (await checkIfScheduleExists(scheduleFields.name, scheduleId)) {
         throw new Error('Cannot create schedules with the same name');
       }
-    } else {
-      schedule.name = null;
     }
   }
 
@@ -295,7 +303,7 @@ export async function createSchedule({
   });
 
   await db.insertWithSchema('schedules', {
-    ...schedule,
+    ...scheduleFields,
     id: scheduleId,
     rule: ruleId,
   });
@@ -324,6 +332,16 @@ export async function updateSchedule({
 }) {
   if (schedule.rule) {
     throw new Error('You cannot change the rule of a schedule');
+  }
+  const scheduleFields = { ...schedule };
+  if ('name' in scheduleFields) {
+    scheduleFields.name = normalizeScheduleName(scheduleFields.name);
+    if (
+      scheduleFields.name &&
+      (await checkIfScheduleExists(scheduleFields.name, scheduleFields.id))
+    ) {
+      throw new Error('Cannot update schedules with the same name');
+    }
   }
   let rule;
 
@@ -400,9 +418,10 @@ export async function updateSchedule({
       await setNextDate({ id: schedule.id, reset: true });
     }
 
-    await db.updateWithSchema('schedules', schedule);
+    await db.updateWithSchema('schedules', scheduleFields);
   });
 
+  // Fork: schedule-driven auto-income budgeting (see #server/budget/auto-income)
   if (autoBudgetingChanged) {
     try {
       await recomputeAutoIncomeBudgets();
@@ -411,7 +430,7 @@ export async function updateSchedule({
     }
   }
 
-  return schedule.id;
+  return scheduleFields.id;
 }
 
 export async function deleteSchedule({ id }) {
@@ -587,7 +606,7 @@ async function advanceSchedulesService(syncSuccess) {
       schedule.next_date,
       schedule.completed,
       hasTrans.has(schedule.id),
-      upcomingLength[0]?.value ?? '7',
+      schedule.custom_upcoming_length ?? upcomingLength[0]?.value ?? '7',
     );
 
     if (status === 'paid') {
