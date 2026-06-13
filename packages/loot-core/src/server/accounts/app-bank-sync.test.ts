@@ -1,5 +1,8 @@
+import * as asyncStorage from '#platform/server/asyncStorage';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
+import * as prefs from '#server/prefs';
+import { handlers } from '#server/tests/mockSyncServer';
 
 import { app } from './app';
 import * as bankSync from './sync';
@@ -42,6 +45,12 @@ beforeEach(async () => {
   vi.resetAllMocks();
   await global.emptyDatabase()();
   await loadMappings();
+  await prefs.loadPrefs();
+  await prefs.savePrefs(
+    { cloudFileId: 'test-cloud-file-id' },
+    { avoidSync: true },
+  );
+  vi.mocked(asyncStorage.getItem).mockResolvedValue('test-token');
 });
 
 describe('simpleFinBatchSync', () => {
@@ -132,5 +141,38 @@ describe('simpleFinBatchSync', () => {
       const acct2Result = result.find(r => r.accountId === 'acct2');
       expect(acct2Result!.res.errors).toHaveLength(0);
     });
+  });
+});
+
+describe('SimpleFIN scoped server requests', () => {
+  afterEach(() => {
+    delete handlers['/secret'];
+    delete handlers['/simplefin/status'];
+  });
+
+  it('adds the current cloud file ID when setting a SimpleFIN secret', async () => {
+    handlers['/secret'] = data => {
+      expect(data).toMatchObject({
+        name: 'simplefin_token',
+        value: 'setup-token',
+        fileId: 'test-cloud-file-id',
+      });
+    };
+
+    await app.handlers['secret-set']({
+      name: 'simplefin_token',
+      value: 'setup-token',
+    });
+  });
+
+  it('adds the current cloud file ID when checking SimpleFIN status', async () => {
+    handlers['/simplefin/status'] = data => {
+      expect(data).toEqual({ fileId: 'test-cloud-file-id' });
+      return { configured: true };
+    };
+
+    const result = await app.handlers['simplefin-status']();
+
+    expect(result).toEqual({ configured: true });
   });
 });

@@ -1,7 +1,24 @@
 import request from 'supertest';
 
+import { getAccountDb } from './account-db';
 import { handlers as app } from './app-secrets';
-import { secretsService } from './services/secrets-service';
+import {
+  getScopedSecretName,
+  secretsService,
+} from './services/secrets-service';
+
+const createFile = ({ fileId, owner = 'genericAdmin' }) => {
+  getAccountDb().mutate(
+    'INSERT INTO files (id, name, owner, deleted) VALUES (?, ?, ?, 0)',
+    [fileId, fileId, owner],
+  );
+};
+
+const deleteFile = fileId => {
+  getAccountDb().mutate('DELETE FROM user_access WHERE file_id = ?', [fileId]);
+  getAccountDb().mutate('DELETE FROM files WHERE id = ?', [fileId]);
+};
+
 describe('secretsService', () => {
   const testSecretName = 'testSecret';
   const testSecretValue = 'testValue';
@@ -78,6 +95,68 @@ describe('secretsService', () => {
       expect(res.body).toEqual({
         status: 'ok',
       });
+    });
+
+    it('scopes SimpleFIN secrets to the provided file ID', async () => {
+      const fileId = 'simplefin-secret-file';
+      createFile({ fileId, owner: 'genericAdmin' });
+
+      const res = await request(app)
+        .post(`/`)
+        .set('x-actual-token', 'valid-token-admin')
+        .send({
+          name: 'simplefin_token',
+          value: 'scoped-token',
+          fileId,
+        });
+
+      expect(res.statusCode).toEqual(200);
+      expect(
+        secretsService.get(getScopedSecretName('simplefin_token', fileId)),
+      ).toBe('scoped-token');
+      expect(secretsService.get('simplefin_token')).not.toBe('scoped-token');
+
+      deleteFile(fileId);
+    });
+
+    it('allows a budget owner to set scoped SimpleFIN secrets', async () => {
+      const fileId = 'simplefin-owner-file';
+      createFile({ fileId, owner: 'genericUser' });
+
+      const res = await request(app)
+        .post(`/`)
+        .set('x-actual-token', 'valid-token-user')
+        .send({
+          name: 'simplefin_token',
+          value: 'owner-token',
+          fileId,
+        });
+
+      expect(res.statusCode).toEqual(200);
+      expect(
+        secretsService.get(getScopedSecretName('simplefin_token', fileId)),
+      ).toBe('owner-token');
+
+      deleteFile(fileId);
+    });
+
+    it('does not allow a non-owner basic user to set scoped SimpleFIN secrets', async () => {
+      const fileId = 'simplefin-not-owner-file';
+      createFile({ fileId, owner: 'genericAdmin' });
+
+      const res = await request(app)
+        .post(`/`)
+        .set('x-actual-token', 'valid-token-user')
+        .send({
+          name: 'simplefin_token',
+          value: 'rejected-token',
+          fileId,
+        });
+
+      expect(res.statusCode).toEqual(403);
+      expect(res.body.reason).toBe('not-owner-or-admin');
+
+      deleteFile(fileId);
     });
   });
 });
