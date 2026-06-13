@@ -2,8 +2,14 @@ import https from 'https';
 
 import express from 'express';
 
+import { isAdmin } from '#account-db';
 import { handleError } from '#app-gocardless/util/handle-error';
-import { SecretName, secretsService } from '#services/secrets-service';
+import {
+  getScopedSecretName,
+  SecretName,
+  secretsService,
+} from '#services/secrets-service';
+import { countUserAccess, getFileById } from '#services/user-service';
 import {
   requestLoggerMiddleware,
   validateSessionMiddleware,
@@ -15,10 +21,55 @@ app.use(requestLoggerMiddleware);
 app.use(express.json());
 app.use(validateSessionMiddleware);
 
+function getAuthorizedFileId(req, res) {
+  const { fileId } = req.body || {};
+
+  if (!fileId || typeof fileId !== 'string') {
+    res.status(400).send({
+      status: 'error',
+      reason: 'file-id-required',
+      details: 'fileId is required',
+    });
+    return null;
+  }
+
+  if (!getFileById(fileId)) {
+    res.status(403).send({
+      status: 'error',
+      reason: 'file-access-denied',
+      details: "File does not exist or you don't have access to it",
+    });
+    return null;
+  }
+
+  if (
+    !isAdmin(res.locals.user_id) &&
+    !countUserAccess(fileId, res.locals.user_id)
+  ) {
+    res.status(403).send({
+      status: 'error',
+      reason: 'file-access-denied',
+      details: "File does not exist or you don't have access to it",
+    });
+    return null;
+  }
+
+  return fileId;
+}
+
+function getSimpleFinSecretName(name, fileId) {
+  return getScopedSecretName(name, fileId);
+}
+
 app.post(
   '/status',
   handleError(async (req, res) => {
-    const token = secretsService.get(SecretName.simplefin_token);
+    const fileId = getAuthorizedFileId(req, res);
+    if (!fileId) return;
+
+    const token = secretsService.get(
+      getSimpleFinSecretName(SecretName.simplefin_token, fileId),
+    );
     const configured = token != null && token !== 'Forbidden';
 
     res.send({
@@ -33,16 +84,27 @@ app.post(
 app.post(
   '/accounts',
   handleError(async (req, res) => {
-    let accessKey = secretsService.get(SecretName.simplefin_accessKey);
+    const fileId = getAuthorizedFileId(req, res);
+    if (!fileId) return;
+
+    const accessKeyName = getSimpleFinSecretName(
+      SecretName.simplefin_accessKey,
+      fileId,
+    );
+    const tokenName = getSimpleFinSecretName(
+      SecretName.simplefin_token,
+      fileId,
+    );
+    let accessKey = secretsService.get(accessKeyName);
 
     try {
       if (accessKey == null || accessKey === 'Forbidden') {
-        const token = secretsService.get(SecretName.simplefin_token);
+        const token = secretsService.get(tokenName);
         if (token == null || token === 'Forbidden') {
           throw new Error('No token');
         } else {
           accessKey = await getAccessKey(token);
-          secretsService.set(SecretName.simplefin_accessKey, accessKey);
+          secretsService.set(accessKeyName, accessKey);
           if (accessKey == null || accessKey === 'Forbidden') {
             throw new Error('No access key');
           }
@@ -72,9 +134,14 @@ app.post(
 app.post(
   '/transactions',
   handleError(async (req, res) => {
+    const fileId = getAuthorizedFileId(req, res);
+    if (!fileId) return;
+
     const { accountId, startDate } = req.body || {};
 
-    const accessKey = secretsService.get(SecretName.simplefin_accessKey);
+    const accessKey = secretsService.get(
+      getSimpleFinSecretName(SecretName.simplefin_accessKey, fileId),
+    );
 
     if (accessKey == null || accessKey === 'Forbidden') {
       invalidToken(res);

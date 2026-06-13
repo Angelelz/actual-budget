@@ -15,6 +15,7 @@ import {
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
 import { get, post } from '#server/post';
+import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
 import { batchMessages } from '#server/sync';
 import { undoable, withUndo } from '#server/undo';
@@ -37,6 +38,14 @@ import type {
 import * as link from './link';
 import { getStartingBalancePayee } from './payees';
 import * as bankSync from './sync';
+
+function isSimpleFinSecretName(name: string) {
+  return name === 'simplefin_token' || name === 'simplefin_accessKey';
+}
+
+function getCurrentCloudFileId() {
+  return prefs.getPrefs()?.cloudFileId;
+}
 
 // Shared base type for link account parameters
 type LinkAccountBaseParams = {
@@ -546,12 +555,21 @@ async function setSecret({
     throw new Error('Failed to get server config.');
   }
 
+  const fileId = getCurrentCloudFileId();
+  if (isSimpleFinSecretName(name) && !fileId) {
+    return {
+      error: 'failed',
+      reason: 'file-id-required',
+    };
+  }
+
   try {
     return await post(
       serverConfig.BASE_SERVER + '/secret',
       {
         name,
         value,
+        ...(isSimpleFinSecretName(name) ? { fileId } : {}),
       },
       {
         'X-ACTUAL-TOKEN': userToken,
@@ -696,6 +714,11 @@ async function simpleFinStatus() {
     return { error: 'unauthorized' };
   }
 
+  const fileId = getCurrentCloudFileId();
+  if (!fileId) {
+    return { configured: false, error: 'file-id-required' };
+  }
+
   const serverConfig = getServer();
   if (!serverConfig) {
     throw new Error('Failed to get server config.');
@@ -703,7 +726,7 @@ async function simpleFinStatus() {
 
   return post(
     serverConfig.SIMPLEFIN_SERVER + '/status',
-    {},
+    { fileId },
     {
       'X-ACTUAL-TOKEN': userToken,
     },
@@ -738,6 +761,11 @@ async function simpleFinAccounts() {
     return { error: 'unauthorized' };
   }
 
+  const fileId = getCurrentCloudFileId();
+  if (!fileId) {
+    return { error: 'file-id-required' };
+  }
+
   const serverConfig = getServer();
   if (!serverConfig) {
     throw new Error('Failed to get server config.');
@@ -746,7 +774,7 @@ async function simpleFinAccounts() {
   try {
     return await post(
       serverConfig.SIMPLEFIN_SERVER + '/accounts',
-      {},
+      { fileId },
       {
         'X-ACTUAL-TOKEN': userToken,
       },

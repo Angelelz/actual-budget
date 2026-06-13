@@ -3,6 +3,7 @@ import * as asyncStorage from '#platform/server/asyncStorage';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 import { post } from '#server/post';
+import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
 import { handlers } from '#server/tests/mockSyncServer';
 import { insertRule, loadRules } from '#server/transactions/transaction-rules';
@@ -28,6 +29,11 @@ beforeEach(async () => {
   await global.emptyDatabase()();
   await loadMappings();
   await loadRules();
+  await prefs.loadPrefs();
+  await prefs.savePrefs(
+    { cloudFileId: 'test-cloud-file-id' },
+    { avoidSync: true },
+  );
 });
 
 function getAllTransactions() {
@@ -638,7 +644,10 @@ describe('Account sync', () => {
 describe('SimpleFin batch sync', () => {
   function mockSimpleFinTransactions(response) {
     vi.mocked(asyncStorage.getItem).mockResolvedValue('test-token');
-    handlers['/simplefin/transactions'] = () => response;
+    handlers['/simplefin/transactions'] = data => {
+      expect(data.fileId).toBe('test-cloud-file-id');
+      return response;
+    };
   }
 
   afterEach(() => {

@@ -8,6 +8,7 @@ import * as db from '#server/db';
 import { TRANSACTION_SORT_INCREMENT } from '#server/db/sort';
 import { runMutator } from '#server/mutators';
 import { post } from '#server/post';
+import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
 import { batchMessages } from '#server/sync';
 import { batchUpdateTransactions } from '#server/transactions';
@@ -38,6 +39,15 @@ import { title } from './title';
 
 function BankSyncError(type: string, code: string, details?: object) {
   return { type: 'BankSyncError', category: type, code, details };
+}
+
+function getSimpleFinFileId() {
+  const fileId = prefs.getPrefs()?.cloudFileId;
+  if (!fileId) {
+    throw BankSyncError('FILE_ID_REQUIRED', 'FILE_ID_REQUIRED');
+  }
+
+  return fileId;
 }
 
 function makeSplitTransaction(trans, subtransactions) {
@@ -199,6 +209,7 @@ async function downloadSimpleFinTransactions(
     res = await post(
       getServer().SIMPLEFIN_SERVER + '/transactions',
       {
+        fileId: getSimpleFinFileId(),
         accountId: acctId,
         startDate: since,
       },

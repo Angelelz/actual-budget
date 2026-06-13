@@ -17,6 +17,23 @@ export const SecretName = {
   pluggyai_itemIds: 'pluggyai_itemIds',
 };
 
+const ScopedSecretSeparator = ':file:';
+
+export function isSimpleFinSecret(name) {
+  return (
+    name === SecretName.simplefin_token ||
+    name === SecretName.simplefin_accessKey
+  );
+}
+
+export function getScopedSecretName(name, fileId) {
+  if (!fileId) {
+    throw new Error('fileId is required');
+  }
+
+  return `${name}${ScopedSecretSeparator}${fileId}`;
+}
+
 class SecretsDb {
   constructor() {
     this.debug = createDebug('actual:secrets-db');
