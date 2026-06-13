@@ -18,6 +18,31 @@ yarn typecheck
 yarn test
 ```
 
+## Migrations (read before merging — this is the one fragile seam)
+
+loot-core checks that a budget's recorded migrations are an **exact ordered
+prefix** of the code's migration list. Upstream only ever appends (higher
+ids), so this works for them. A fork migration is safe **only if its id stays
+above every upstream migration that a file applies before it** — otherwise an
+upstream migration that sorts _below_ ours leaves a gap and every load throws
+`out-of-sync-migrations`.
+
+Rules for this fork:
+
+1. **Keep the fork migration's id above upstream's newest.** Currently
+   `1781400000000_add_schedule_auto_budget.js`. A normal "now" timestamp is
+   correct; **never** use a max/far-future id (that puts _every_ future
+   upstream migration below ours → guaranteed gaps).
+2. **After each upstream merge**, check whether upstream added a migration with
+   an id **higher** than ours:
+   `ls packages/loot-core/migrations | sort | tail`. If so, rename the fork
+   migration to a new id above it, update the import + `javascriptMigrations`
+   map in `server/migrate/migrations.ts`, and keep it idempotent.
+3. The fork migration is **idempotent** (adds the column only if missing) so it
+   re-applies harmlessly to files that already have it.
+4. `patchBadMigrations` (in `migrations.ts`) drops the original interleaved id
+   `1778270218300` from old files so they re-converge. Leave that in place.
+
 ## Design principle: keep customizations in fork-owned files behind one-line seams
 
 Each feature's logic lives in **fork-owned files** (safe — upstream never edits
@@ -71,7 +96,7 @@ budget each month, and the cell renders read-only.
 - `packages/desktop-client/src/components/schedules/ScheduleAutoBudgetField.tsx` — the form field
 - `packages/desktop-client/src/hooks/useAutoManagedIncomeCategories.ts`
 - `packages/desktop-client/src/components/settings/AutoIncomeBudgetSettings.tsx` — horizon setting
-- `packages/loot-core/migrations/1778270218300_add_schedule_auto_budget.sql`
+- `packages/loot-core/migrations/1781400000000_add_schedule_auto_budget.js` (idempotent — see "Migrations" below)
 
 **Seams in upstream files**
 

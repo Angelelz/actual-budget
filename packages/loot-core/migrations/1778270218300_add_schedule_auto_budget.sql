@@ -1,5 +1,0 @@
-BEGIN TRANSACTION;
-
-ALTER TABLE schedules ADD COLUMN auto_budget_category TEXT;
-
-COMMIT;
