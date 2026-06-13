@@ -1,13 +1,11 @@
 import express from 'express';
 
 import { getActiveLoginMethod, isAdmin } from './account-db';
+import { SecretName, secretsService } from './services/secrets-service';
 import {
-  getScopedSecretName,
+  authorizeSimpleFinSecret,
   isSimpleFinSecret,
-  SecretName,
-  secretsService,
-} from './services/secrets-service';
-import { getFileById, getFileOwnerId } from './services/user-service';
+} from './services/simplefin-secrets';
 import {
   requestLoggerMiddleware,
   validateSessionMiddleware,
@@ -39,47 +37,20 @@ app.post('/', async (req, res) => {
     return;
   }
 
+  // SimpleFIN secrets are authorized per budget file (fork seam); every other
+  // secret stays admin-managed in OpenID mode.
   let secretName = name;
-
   if (isSimpleFinSecret(name)) {
-    // SimpleFIN credentials are scoped per budget file, so the budget owner
-    // (or an admin) may set them even when they are not a global secrets
-    // admin in OpenID mode.
-    if (!fileId || typeof fileId !== 'string') {
-      res.status(400).send({
-        status: 'error',
-        reason: 'file-id-required',
-        details: 'fileId is required for SimpleFIN secrets',
-      });
-
+    const result = authorizeSimpleFinSecret({
+      name,
+      fileId,
+      userId: res.locals.user_id,
+    });
+    if (!result.ok) {
+      res.status(result.error.status).send(result.error.body);
       return;
     }
-
-    if (!getFileById(fileId)) {
-      res.status(403).send({
-        status: 'error',
-        reason: 'file-access-denied',
-        details: "File does not exist or you don't have access to it",
-      });
-
-      return;
-    }
-
-    const canSaveScopedSecret =
-      isAdmin(res.locals.user_id) ||
-      getFileOwnerId(fileId) === res.locals.user_id;
-
-    if (!canSaveScopedSecret) {
-      res.status(403).send({
-        status: 'error',
-        reason: 'not-owner-or-admin',
-        details: 'You have to be the budget owner or admin to set secrets',
-      });
-
-      return;
-    }
-
-    secretName = getScopedSecretName(name, fileId);
+    secretName = result.secretName;
   } else if (!canManageSecrets(res.locals.user_id)) {
     res.status(403).send({
       status: 'error',
