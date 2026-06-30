@@ -30,10 +30,10 @@ export function getBudgetRange(start: string, end: string) {
 
   // Budgets should exist 3 months before the earliest needed date
   // (either the oldest transaction or the current month if no
-  // transactions yet), and a year from the current date. There's no
+  // transactions yet), and two years from the current date. There's no
   // need to ever have budgets outside that range.
   start = monthUtils.subMonths(start, 3);
-  end = monthUtils.addMonths(end, 12);
+  end = monthUtils.addMonths(end, 24);
 
   return { start, end, range: monthUtils.rangeInclusive(start, end) };
 }

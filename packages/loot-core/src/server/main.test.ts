@@ -173,7 +173,7 @@ describe('Budget', () => {
 
     let bounds = await runHandler(handlers['get-budget-bounds']);
     expect(bounds.start).toBe('2016-10');
-    expect(bounds.end).toBe('2018-01');
+    expect(bounds.end).toBe('2019-01');
     expect(spreadsheet.meta().createdMonths).toMatchSnapshot();
 
     // Add a transaction (which needs an account) earlier then the
@@ -193,7 +193,7 @@ describe('Budget', () => {
 
     bounds = await runHandler(handlers['get-budget-bounds']);
     expect(bounds.start).toBe('2016-02');
-    expect(bounds.end).toBe('2018-02');
+    expect(bounds.end).toBe('2019-02');
     expect(spreadsheet.meta().createdMonths).toMatchSnapshot();
 
     await new Promise(resolve => spreadsheet.onFinish(resolve));
