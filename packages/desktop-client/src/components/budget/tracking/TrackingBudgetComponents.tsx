@@ -227,10 +227,9 @@ export const CategoryMonth = memo(function CategoryMonth({
   const showScheduleIndicator = schedule && scheduleStatus;
 
   const autoManagedIncomeCategories = useAutoManagedIncomeCategories();
-  const isAutoBudgetManaged =
-    !!category.is_income && autoManagedIncomeCategories.has(category.id);
+  const isAutoBudgetManaged = autoManagedIncomeCategories.has(category.id);
   const autoBudgetTitle = t(
-    'This category is governed by a scheduled income. To change the amount, edit the schedule. To budget extra income manually, create a separate income category.',
+    'This category is governed by an automatic budget item. To change the amount, edit the schedule.',
   );
 
   return (

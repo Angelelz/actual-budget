@@ -44,6 +44,20 @@ async function insertIncomeCategory(id = 'income-cat') {
   });
 }
 
+async function insertExpenseCategory(id = 'expense-cat') {
+  await db.insertCategoryGroup({
+    id: 'expense-group',
+    name: 'Expenses',
+    is_income: 0,
+  });
+  await db.insertCategory({
+    id,
+    name: 'Mortgage',
+    cat_group: 'expense-group',
+    is_income: 0,
+  });
+}
+
 async function createAutoBudgetSchedule({
   category,
   amount,
@@ -199,6 +213,29 @@ describe('recomputeAutoIncomeBudgets', () => {
     expect(await readBudget('income-cat', '2017-01')).toBe(500000);
     expect(await readBudget('income-cat', '2017-02')).toBe(500000);
     expect(await readBudget('income-cat', '2017-03')).toBe(500000);
+  });
+
+  it('budgets negative schedules as positive amounts for expense categories', async () => {
+    setPref('budgetType', 'tracking');
+    setPref('autoIncomeBudgetHorizonMonths', '3');
+    await insertIncomeCategory('income-cat');
+    await insertExpenseCategory('mortgage-cat');
+    await createAutoBudgetSchedule({
+      category: 'mortgage-cat',
+      amount: -400000,
+      startDate: '2017-01-01',
+    });
+
+    await sheet.loadSpreadsheet(db);
+    await budget.createBudget(['2017-01', '2017-02', '2017-03']);
+    await sheet.waitOnSpreadsheet();
+
+    await recomputeAutoIncomeBudgets();
+    await sheet.waitOnSpreadsheet();
+
+    expect(await readBudget('mortgage-cat', '2017-01')).toBe(400000);
+    expect(await readBudget('mortgage-cat', '2017-02')).toBe(400000);
+    expect(await readBudget('mortgage-cat', '2017-03')).toBe(400000);
   });
 
   it('does nothing in envelope (non-tracking) budget mode', async () => {

@@ -54,8 +54,7 @@ export function BudgetCell<
   const [budgetType = 'envelope'] = useSyncedPref('budgetType');
   const categoryNotes = useNotes(category.id);
   const autoManagedIncomeCategories = useAutoManagedIncomeCategories();
-  const isAutoBudgetManaged =
-    !!category.is_income && autoManagedIncomeCategories.has(category.id);
+  const isAutoBudgetManaged = autoManagedIncomeCategories.has(category.id);
 
   const onSaveNotes = useCallback(async (id: string, notes: string) => {
     await send('notes-save', { id, note: notes });
@@ -202,7 +201,7 @@ export function BudgetCell<
             aria-label={
               isAutoBudgetManaged
                 ? t(
-                    'Auto-budgeted from a scheduled income for {{categoryName}}',
+                    'Auto-budgeted from an automatic budget item for {{categoryName}}',
                     { categoryName: category.name },
                   )
                 : t('Open budget menu for {{categoryName}} category', {

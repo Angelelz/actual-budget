@@ -362,8 +362,8 @@ function EmptyState() {
       </Paragraph>
       <Paragraph style={{ color: theme.pageTextLight, fontSize: 13 }}>
         <Trans>
-          Tip: this report is most useful once you&rsquo;ve set up auto-income
-          schedules and copied your spend budgets forward via{' '}
+          Tip: this report is most useful once you&rsquo;ve set up automatic
+          budget items and copied your spend budgets forward via{' '}
           <em>Set as long-term</em>.
         </Trans>
       </Paragraph>

@@ -75,6 +75,8 @@ type AutoBudgetSchedule = ScheduleEntity & {
   _account: string | null;
 };
 
+type AutoBudgetCategory = Pick<db.DbCategory, 'id' | 'is_income'>;
+
 async function getAutoBudgetSchedules(): Promise<AutoBudgetSchedule[]> {
   const { data } = await aqlQuery(
     q('schedules')
@@ -86,6 +88,33 @@ async function getAutoBudgetSchedules(): Promise<AutoBudgetSchedule[]> {
       .select('*'),
   );
   return data as AutoBudgetSchedule[];
+}
+
+function getAutoBudgetCategories(
+  schedules: AutoBudgetSchedule[],
+): Map<string, boolean> {
+  const categoryIds = Array.from(
+    new Set(schedules.map(schedule => schedule.auto_budget_category)),
+  );
+  if (categoryIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = db.runQuery<AutoBudgetCategory>(
+    `SELECT id, is_income FROM categories
+     WHERE id IN (${categoryIds.map(() => '?').join(',')})`,
+    categoryIds,
+    true,
+  );
+
+  return new Map(rows.map(row => [row.id, row.is_income === 1]));
+}
+
+function normalizeAutoBudgetAmount(amount: number, isIncome?: boolean): number {
+  if (isIncome === false && amount < 0) {
+    return -amount;
+  }
+  return amount;
 }
 
 /**
@@ -156,13 +185,18 @@ function buildTargets(
   toMonth: string,
 ): Targets {
   const targets: Targets = new Map();
+  const autoBudgetCategories = getAutoBudgetCategories(schedules);
   for (const schedule of schedules) {
     if (!schedule.auto_budget_category) continue;
     const byMonth = projectOccurrencesByMonth(schedule, fromMonth, toMonth);
     if (Object.keys(byMonth).length === 0) continue;
+    const isIncomeCategory = autoBudgetCategories.get(
+      schedule.auto_budget_category,
+    );
     const existing = targets.get(schedule.auto_budget_category) || {};
     for (const [month, cents] of Object.entries(byMonth)) {
-      existing[month] = (existing[month] || 0) + cents;
+      const amount = normalizeAutoBudgetAmount(cents, isIncomeCategory);
+      existing[month] = (existing[month] || 0) + amount;
     }
     targets.set(schedule.auto_budget_category, existing);
   }

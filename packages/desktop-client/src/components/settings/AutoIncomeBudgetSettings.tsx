@@ -85,7 +85,7 @@ export function AutoIncomeBudgetSettings() {
       <Text>
         <Trans>
           <strong>Budget projection horizon.</strong> Used by{' '}
-          <strong>auto-income budgeting</strong> (projecting scheduled income
+          <strong>automatic budget items</strong> (projecting scheduled items
           into future months) and by the <strong>"Set as long-term"</strong>{' '}
           actions (copying a spend budget forward). Choose how many months ahead
           to project (1 – 60).
