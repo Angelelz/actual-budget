@@ -160,6 +160,7 @@ const sidebars = {
             'transactions/merging',
             'accounts/reconciliation',
             'transactions/payees',
+            'transactions/payee-locations',
             'transactions/bulk-editing',
             'transactions/tags',
             'transactions/split-transactions',
@@ -171,6 +172,7 @@ const sidebars = {
                 id: 'advanced/bank-sync',
               },
               items: [
+                'advanced/bank-sync/akahu',
                 'advanced/bank-sync/enable-banking',
                 'advanced/bank-sync/gocardless',
                 'advanced/bank-sync/simplefin',
@@ -217,6 +219,7 @@ const sidebars = {
             'experimental/formulas',
             'experimental/balance-forecast-report',
             'experimental/budget-analysis-report',
+            'experimental/monte-carlo-analysis',
             'experimental/sankey-report',
           ],
         },

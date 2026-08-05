@@ -14,8 +14,8 @@ import {
 } from '#server/errors';
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
-import { get, post } from '#server/post';
-import * as prefs from '#server/prefs';
+import { del, get, post } from '#server/post';
+import { getPrefs } from '#server/prefs';
 import { getServer } from '#server/server-config';
 import { batchMessages } from '#server/sync';
 import { undoable, withUndo } from '#server/undo';
@@ -26,6 +26,7 @@ import { amountToInteger } from '#shared/util';
 import type { ImportTransactionsOpts } from '#types/api-handlers';
 import type {
   AccountEntity,
+  BankSyncProviderStatus,
   BankSyncStatus,
   CategoryEntity,
   GoCardlessToken,
@@ -41,14 +42,6 @@ import type {
 import * as link from './link';
 import { getStartingBalancePayee } from './payees';
 import * as bankSync from './sync';
-
-function isSimpleFinSecretName(name: string) {
-  return name === 'simplefin_token' || name === 'simplefin_accessKey';
-}
-
-function getCurrentCloudFileId() {
-  return prefs.getPrefs()?.cloudFileId;
-}
 
 // Shared base type for link account parameters
 type LinkAccountBaseParams = {
@@ -326,6 +319,7 @@ async function linkPluggyAiAccount({
   externalAccount: SyncServerPluggyAiAccount;
 }) {
   let id;
+  const fileId = getPrefs()?.cloudFileId;
 
   const institution = {
     // Persist a null name when the provider doesn't report an institution, so
@@ -381,6 +375,7 @@ async function linkPluggyAiAccount({
     bank.bank_id,
     startingDate,
     startingBalance,
+    fileId,
   );
 
   await handleSyncResponse(syncRes, id);
@@ -720,9 +715,11 @@ async function moveAccount({
 async function setSecret({
   name,
   value,
+  fileId = null,
 }: {
   name: string;
   value: string | null;
+  fileId?: string | null;
 }) {
   const userToken = await asyncStorage.getItem('user-token');
 
@@ -735,25 +732,27 @@ async function setSecret({
     throw new Error('Failed to get server config.');
   }
 
-  const fileId = getCurrentCloudFileId();
-  if (isSimpleFinSecretName(name) && !fileId) {
-    return {
-      error: 'failed',
-      reason: 'file-id-required',
-    };
-  }
+  const headers = {
+    'X-ACTUAL-TOKEN': userToken,
+    ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
+  };
 
   try {
+    if (value === null) {
+      return await del(
+        serverConfig.BASE_SERVER + '/secret/' + name,
+        {},
+        headers,
+      );
+    }
+
     return await post(
       serverConfig.BASE_SERVER + '/secret',
       {
         name,
         value,
-        ...(isSimpleFinSecretName(name) ? { fileId } : {}),
       },
-      {
-        'X-ACTUAL-TOKEN': userToken,
-      },
+      headers,
     );
   } catch (error) {
     return {
@@ -894,11 +893,6 @@ async function simpleFinStatus() {
     return { error: 'unauthorized' };
   }
 
-  const fileId = getCurrentCloudFileId();
-  if (!fileId) {
-    return { configured: false, error: 'file-id-required' };
-  }
-
   const serverConfig = getServer();
   if (!serverConfig) {
     throw new Error('Failed to get server config.');
@@ -906,14 +900,14 @@ async function simpleFinStatus() {
 
   return post(
     serverConfig.SIMPLEFIN_SERVER + '/status',
-    { fileId },
+    {},
     {
       'X-ACTUAL-TOKEN': userToken,
     },
   );
 }
 
-async function pluggyAiStatus() {
+async function pluggyAiStatus(): Promise<BankSyncProviderStatus> {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -925,11 +919,13 @@ async function pluggyAiStatus() {
     throw new Error('Failed to get server config.');
   }
 
+  const fileId = getPrefs()?.cloudFileId;
   return post(
     serverConfig.PLUGGYAI_SERVER + '/status',
     {},
     {
       'X-ACTUAL-TOKEN': userToken,
+      ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
     },
   );
 }
@@ -962,11 +958,6 @@ async function simpleFinAccounts() {
     return { error: 'unauthorized' };
   }
 
-  const fileId = getCurrentCloudFileId();
-  if (!fileId) {
-    return { error: 'file-id-required' };
-  }
-
   const serverConfig = getServer();
   if (!serverConfig) {
     throw new Error('Failed to get server config.');
@@ -975,7 +966,7 @@ async function simpleFinAccounts() {
   try {
     return await post(
       serverConfig.SIMPLEFIN_SERVER + '/accounts',
-      { fileId },
+      {},
       {
         'X-ACTUAL-TOKEN': userToken,
       },
@@ -999,11 +990,13 @@ async function pluggyAiAccounts() {
   }
 
   try {
+    const fileId = getPrefs()?.cloudFileId;
     return await post(
       serverConfig.PLUGGYAI_SERVER + '/accounts',
       {},
       {
         'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
       },
       60000,
     );
@@ -1404,6 +1397,18 @@ function getBankSyncStatusFromError(
     if (err.category === 'ACCOUNT_NEEDS_ATTENTION') {
       return 'attention-required';
     }
+
+    if (err.category === 'RATE_LIMIT_EXCEEDED') {
+      return 'rate-limit-exceeded';
+    }
+
+    if (err.category === 'TIMED_OUT') {
+      return 'timed-out';
+    }
+
+    if (err.category === 'ACCOUNT_MISSING') {
+      return 'account-missing';
+    }
   }
 
   return 'failed';
@@ -1448,6 +1453,7 @@ async function accountsBankSync({
   const newTransactions: Array<TransactionEntity['id']> = [];
   const matchedTransactions: Array<TransactionEntity['id']> = [];
   const updatedAccounts: Array<AccountEntity['id']> = [];
+  const fileId = getPrefs()?.cloudFileId;
 
   for (const acct of accounts) {
     if (acct.bankId && acct.account_id) {
@@ -1459,6 +1465,9 @@ async function accountsBankSync({
           acct.id,
           acct.account_id,
           acct.bankId,
+          undefined,
+          undefined,
+          fileId,
         );
 
         const syncResponseData = await handleSyncResponse(

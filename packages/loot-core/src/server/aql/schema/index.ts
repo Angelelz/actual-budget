@@ -113,6 +113,8 @@ export const schema = {
     posts_transaction: f('boolean'),
     custom_upcoming_length: f('string'),
     tombstone: f('boolean'),
+    sort_order: f('float'),
+    // Fork: schedule-driven auto-income budgeting
     auto_budget_category: f('id', { ref: 'categories' }),
 
     // These are special fields that are actually pulled from the

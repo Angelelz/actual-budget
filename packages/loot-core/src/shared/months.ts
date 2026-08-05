@@ -1,8 +1,8 @@
 // @ts-strict-ignore
 import * as d from 'date-fns';
 import type { Locale } from 'date-fns';
-import memoizeOne from 'memoize-one';
 
+import { memoizeOne } from '#shared/memoize';
 import * as Platform from '#shared/platform';
 import type { SyncedPrefs } from '#types/prefs';
 
@@ -95,6 +95,18 @@ export function isValidYearMonth(value: string): boolean {
   if (!match) return false;
   const month = Number(match[2]);
   return month >= 1 && month <= 12;
+}
+
+// Whether a value is day-shaped (`yyyy-MM-dd`) rather than month-shaped
+// (`yyyy-MM`).
+export function isValidYearMonthDay(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return false;
+  return day >= 1 && day <= d.getDaysInMonth(new Date(year, month - 1));
 }
 
 export function weekFromDate(

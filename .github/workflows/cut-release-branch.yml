@@ -22,7 +22,7 @@ permissions:
 jobs:
   cut-release-branch:
     if: github.repository_owner == 'actualbudget'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-latest
     environment: release
     env:
       GH_TOKEN: ${{ github.token }}
@@ -94,7 +94,7 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          for pkg in desktop-client desktop-electron sync-server api cli loot-core; do
+          for pkg in desktop-client desktop-electron sync-server api cli loot-core mobile-client; do
             yarn workspace @actual-app/ci-actions tsx bin/get-next-package-version.ts \
               --package-json "./packages/$pkg/package.json" \
               --version "$VERSION" \

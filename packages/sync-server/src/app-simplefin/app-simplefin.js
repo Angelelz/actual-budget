@@ -1,15 +1,7 @@
-import https from 'https';
-
 import express from 'express';
 
-import { isAdmin } from '#account-db';
 import { handleError } from '#app-gocardless/util/handle-error';
-import {
-  getScopedSecretName,
-  SecretName,
-  secretsService,
-} from '#services/secrets-service';
-import { countUserAccess, getFileById } from '#services/user-service';
+import { SecretName, secretsService } from '#services/secrets-service';
 import {
   requestLoggerMiddleware,
   validateSessionMiddleware,
@@ -22,56 +14,11 @@ app.use(requestLoggerMiddleware);
 app.use(express.json());
 app.use(validateSessionMiddleware);
 
-function getAuthorizedFileId(req, res) {
-  const { fileId } = req.body || {};
-
-  if (!fileId || typeof fileId !== 'string') {
-    res.status(400).send({
-      status: 'error',
-      reason: 'file-id-required',
-      details: 'fileId is required',
-    });
-    return null;
-  }
-
-  if (!getFileById(fileId)) {
-    res.status(403).send({
-      status: 'error',
-      reason: 'file-access-denied',
-      details: "File does not exist or you don't have access to it",
-    });
-    return null;
-  }
-
-  if (
-    !isAdmin(res.locals.user_id) &&
-    !countUserAccess(fileId, res.locals.user_id)
-  ) {
-    res.status(403).send({
-      status: 'error',
-      reason: 'file-access-denied',
-      details: "File does not exist or you don't have access to it",
-    });
-    return null;
-  }
-
-  return fileId;
-}
-
-function getSimpleFinSecretName(name, fileId) {
-  return getScopedSecretName(name, fileId);
-}
-
 app.post(
   '/status',
   handleError(async (req, res) => {
-    const fileId = getAuthorizedFileId(req, res);
-    if (!fileId) return;
-
-    const token = secretsService.get(
-      getSimpleFinSecretName(SecretName.simplefin_token, fileId),
-    );
-    const configured = token != null && token !== 'Forbidden';
+    const token = secretsService.get(SecretName.simplefin_token);
+    const configured = token != null && !isForbidden(token);
 
     res.send({
       status: 'ok',
@@ -85,35 +32,43 @@ app.post(
 app.post(
   '/accounts',
   handleError(async (req, res) => {
-    const fileId = getAuthorizedFileId(req, res);
-    if (!fileId) return;
+    let accessKey = secretsService.get(SecretName.simplefin_accessKey);
 
-    const accessKeyName = getSimpleFinSecretName(
-      SecretName.simplefin_accessKey,
-      fileId,
-    );
-    const tokenName = getSimpleFinSecretName(
-      SecretName.simplefin_token,
-      fileId,
-    );
-    let accessKey = secretsService.get(accessKeyName);
-
-    try {
-      if (accessKey == null || accessKey === 'Forbidden') {
-        const token = secretsService.get(tokenName);
-        if (token == null || token === 'Forbidden') {
-          throw new Error('No token');
-        } else {
-          accessKey = await getAccessKey(token);
-          secretsService.set(accessKeyName, accessKey);
-          if (accessKey == null || accessKey === 'Forbidden') {
-            throw new Error('No access key');
-          }
-        }
+    if (isInvalidAccessKey(accessKey)) {
+      const token = secretsService.get(SecretName.simplefin_token);
+      if (token == null || isForbidden(token)) {
+        invalidToken(res);
+        return;
       }
-    } catch {
-      invalidToken(res);
-      return;
+
+      const claimUrl = decodeClaimUrl(token);
+      if (claimUrl == null) {
+        console.log(
+          'SimpleFIN setup token does not decode to a claim URL - re-enter the token',
+        );
+        invalidToken(res);
+        return;
+      }
+
+      try {
+        accessKey = await claimAccessKey(claimUrl);
+      } catch (e) {
+        console.log('Failed to claim the SimpleFIN setup token:');
+        serverDown(e, res);
+        return;
+      }
+
+      if (isInvalidAccessKey(accessKey)) {
+        console.log(
+          `SimpleFIN rejected the setup token claim: ${
+            accessKey.slice(0, 200) || '(empty response)'
+          }`,
+        );
+        invalidToken(res);
+        return;
+      }
+
+      secretsService.set(SecretName.simplefin_accessKey, accessKey);
     }
 
     try {
@@ -135,16 +90,11 @@ app.post(
 app.post(
   '/transactions',
   handleError(async (req, res) => {
-    const fileId = getAuthorizedFileId(req, res);
-    if (!fileId) return;
-
     const { accountId, startDate } = req.body || {};
 
-    const accessKey = secretsService.get(
-      getSimpleFinSecretName(SecretName.simplefin_accessKey, fileId),
-    );
+    const accessKey = secretsService.get(SecretName.simplefin_accessKey);
 
-    if (accessKey == null || accessKey === 'Forbidden') {
+    if (isInvalidAccessKey(accessKey)) {
       invalidToken(res);
       return;
     }
@@ -171,7 +121,7 @@ app.post(
         new Date(earliestStartDate),
       );
     } catch (e) {
-      if (e.message === 'Forbidden') {
+      if (isForbidden(e.message)) {
         invalidToken(res);
       } else {
         serverDown(e, res);
@@ -358,6 +308,8 @@ function serverDown(e, res) {
   });
 }
 
+const ACCESS_KEY_FORMAT = /^.*\/\/.*:.*@.*$/;
+
 function parseAccessKey(accessKey) {
   let scheme = null;
   let rest = null;
@@ -365,7 +317,7 @@ function parseAccessKey(accessKey) {
   let username = null;
   let password = null;
   let baseUrl = null;
-  if (!accessKey || !accessKey.match(/^.*\/\/.*:.*@.*$/)) {
+  if (!accessKey || !ACCESS_KEY_FORMAT.test(accessKey)) {
     console.log('Invalid SimpleFIN access key');
     throw new Error(`Invalid access key`);
   }
@@ -380,28 +332,52 @@ function parseAccessKey(accessKey) {
   };
 }
 
-async function getAccessKey(base64Token) {
-  const token = Buffer.from(base64Token, 'base64').toString();
+function decodeClaimUrl(base64Token) {
+  const decoded = Buffer.from(base64Token, 'base64').toString();
+
+  let url;
+  try {
+    url = new URL(decoded);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return null;
+  }
+
+  return decoded;
+}
+
+async function claimAccessKey(claimUrl) {
   // Self-hosters may run their own SimpleFIN bridge on the local network, so
   // private addresses are allowed here; cloud metadata and other always-blocked
   // ranges are still rejected.
-  await assertUrlAllowed(token, { allowPrivateNetwork: true });
-  const options = {
+  await assertUrlAllowed(claimUrl, { allowPrivateNetwork: true });
+
+  // don't auto-follow redirects for SSRF safety
+  const response = await fetch(claimUrl, {
     method: 'POST',
-    port: 443,
-    headers: { 'Content-Length': 0 },
-  };
-  return new Promise((resolve, reject) => {
-    const req = https.request(new URL(token), options, res => {
-      res.on('data', d => {
-        resolve(d.toString());
-      });
-    });
-    req.on('error', e => {
-      reject(e);
-    });
-    req.end();
+    redirect: 'manual',
   });
+
+  if (!response.ok && response.status !== 403) {
+    throw new Error(`SimpleFIN claim failed with HTTP ${response.status}`);
+  }
+
+  return (await response.text()).trim();
+}
+
+function isForbidden(value) {
+  return typeof value === 'string' && value.startsWith('Forbidden');
+}
+
+function isInvalidAccessKey(accessKey) {
+  return (
+    typeof accessKey !== 'string' ||
+    isForbidden(accessKey) ||
+    !ACCESS_KEY_FORMAT.test(accessKey)
+  );
 }
 
 async function getTransactions(accessKey, accounts, startDate, endDate) {

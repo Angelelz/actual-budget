@@ -14,12 +14,25 @@ const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 // browser environment this is where we initialize the backend and
 // everything else.
 
-const IS_DEV = process.env.NODE_ENV === 'development';
+const IS_DEV = import.meta.env.DEV;
 const ACTUAL_VERSION = Platform.isPlaywright
   ? '99.9.9'
-  : process.env.REACT_APP_REVIEW_ID
+  : import.meta.env.REACT_APP_REVIEW_ID
     ? '.preview'
     : packageJson.version;
+
+// The OIDC callback (/openid-cb) is reached via a full-page navigation back
+// from the OpenID provider. Routing it through the SharedWorker coordinator is
+// unreliable: the returning tab can be left UNASSIGNED (no leader/backend), so
+// the token write hangs and login silently fails (worst on iOS/iPad, where the
+// pre-redirect tab never reports closing). It's a transient pre-login page with
+// no budget open, so it doesn't need multi-tab coordination — give it a direct
+// Worker so the token write resolves and login can complete. Once the user
+// opens a budget the app navigates and the next page load rejoins the
+// coordinator normally.
+const isOpenIdCallback = window.location.pathname
+  .replace(/\/+$/, '')
+  .endsWith('/openid-cb');
 
 // *** Start the backend ***
 //
@@ -33,12 +46,16 @@ const worker = startBrowserBackend({
   initPayload: {
     version: ACTUAL_VERSION,
     isDev: IS_DEV,
-    publicUrl: process.env.PUBLIC_URL,
-    hash: process.env.REACT_APP_BACKEND_WORKER_HASH,
+    publicUrl: import.meta.env.BASE_URL.slice(0, -1),
+    hash: import.meta.env.REACT_APP_BACKEND_WORKER_HASH,
   },
   createSharedWorker: () =>
     new SharedBrowserServerWorker({ name: 'actual-backend' }),
-  forceDirectWorker: Platform.isPlaywright || Platform.isIOS,
+  forceDirectWorker:
+    Platform.isPlaywright ||
+    Platform.isIOS ||
+    Platform.isAndroid ||
+    isOpenIdCallback,
 });
 
 let isUpdateReadyForDownload = false;

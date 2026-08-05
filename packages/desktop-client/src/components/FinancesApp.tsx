@@ -25,6 +25,7 @@ import { UserAccessPage } from './admin/UserAccess/UserAccessPage';
 import { UserDirectoryPage } from './admin/UserDirectory/UserDirectoryPage';
 import { BankSyncStatus } from './BankSyncStatus';
 import { CommandBar } from './CommandBar';
+import { ContextMenu } from './ContextMenu';
 import { EnableBankingCallback } from './EnableBankingCallback';
 import { FeatureErrorFallback } from './FeatureErrorFallback';
 import { GlobalKeys } from './GlobalKeys';
@@ -157,7 +158,7 @@ export function FinancesApp() {
               type: 'message',
               title: t('A new version of Actual is available!'),
               message:
-                (process.env.REACT_APP_IS_PIKAPODS ?? '').toLowerCase() ===
+                (import.meta.env.REACT_APP_IS_PIKAPODS ?? '').toLowerCase() ===
                 'true'
                   ? t(
                       'A new version of Actual is available! Your Pikapods instance will be automatically updated in the next few days - no action needed.',
@@ -198,6 +199,7 @@ export function FinancesApp() {
       <RouterBehaviors />
       <GlobalKeys />
       <CommandBar />
+      <ContextMenu />
       <View
         style={{
           flexDirection: 'row',
@@ -263,32 +265,63 @@ export function FinancesApp() {
 
                   <Route
                     path="/budget"
-                    element={<NarrowAlternate name="Budget" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Budget" />
+                      </ErrorBoundary>
+                    }
                   />
 
                   <Route
                     path="/schedules"
-                    element={<NarrowAlternate name="Schedules" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Schedules" />
+                      </ErrorBoundary>
+                    }
                   />
                   <Route
                     path="/schedules/:id"
                     element={
-                      <WideNotSupported>
-                        <NarrowAlternate name="ScheduleEdit" />
-                      </WideNotSupported>
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <WideNotSupported>
+                          <NarrowAlternate name="ScheduleEdit" />
+                        </WideNotSupported>
+                      </ErrorBoundary>
                     }
                   />
 
                   <Route
                     path="/payees"
-                    element={<NarrowAlternate name="Payees" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Payees" />
+                      </ErrorBoundary>
+                    }
                   />
                   <Route
                     path="/payees/:id"
                     element={
-                      <WideNotSupported>
-                        <NarrowAlternate name="PayeeEdit" />
-                      </WideNotSupported>
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <WideNotSupported>
+                          <NarrowAlternate name="PayeeEdit" />
+                        </WideNotSupported>
+                      </ErrorBoundary>
                     }
                   />
                   <Route
@@ -315,14 +348,26 @@ export function FinancesApp() {
                   />
                   <Route
                     path="/bank-sync"
-                    element={<NarrowAlternate name="BankSync" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="BankSync" />
+                      </ErrorBoundary>
+                    }
                   />
                   <Route
                     path="/bank-sync/account/:accountId/edit"
                     element={
-                      <WideNotSupported redirectTo="/bank-sync">
-                        <MobileBankSyncAccountEditPage />
-                      </WideNotSupported>
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <WideNotSupported redirectTo="/bank-sync">
+                          <MobileBankSyncAccountEditPage />
+                        </WideNotSupported>
+                      </ErrorBoundary>
                     }
                   />
                   <Route path="/tags" element={<ManageTagsPage />} />
@@ -344,26 +389,52 @@ export function FinancesApp() {
 
                   <Route
                     path="/accounts"
-                    element={<NarrowAlternate name="Accounts" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Accounts" />
+                      </ErrorBoundary>
+                    }
                   />
 
                   <Route
                     path="/accounts/:id"
-                    element={<NarrowAlternate name="Account" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Account" />
+                      </ErrorBoundary>
+                    }
                   />
 
                   <Route
                     path="/transactions/:transactionId"
                     element={
-                      <WideNotSupported>
-                        <TransactionEdit />
-                      </WideNotSupported>
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <WideNotSupported>
+                          <TransactionEdit />
+                        </WideNotSupported>
+                      </ErrorBoundary>
                     }
                   />
 
                   <Route
                     path="/categories/:id"
-                    element={<NarrowAlternate name="Category" />}
+                    element={
+                      <ErrorBoundary
+                        FallbackComponent={FeatureErrorFallback}
+                        resetKeys={[location.pathname]}
+                      >
+                        <NarrowAlternate name="Category" />
+                      </ErrorBoundary>
+                    }
                   />
                   {multiuserEnabled && (
                     <Route

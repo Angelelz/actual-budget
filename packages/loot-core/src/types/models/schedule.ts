@@ -28,6 +28,8 @@ export type ScheduleEntity = {
   posts_transaction: boolean;
   custom_upcoming_length?: string | null;
   tombstone: boolean;
+  sort_order?: number;
+  // Fork: schedule-driven auto-income budgeting
   auto_budget_category?: string | null;
 
   // These are special fields that are actually pulled from the

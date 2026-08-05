@@ -14,6 +14,7 @@ import { Crossover } from './reports/Crossover';
 import { CustomReport } from './reports/CustomReport';
 import { DebtProjection } from './reports/DebtProjection';
 import { Formula } from './reports/Formula';
+import { MonteCarlo } from './reports/monte-carlo/MonteCarlo';
 import { NetWorth } from './reports/NetWorth';
 import { Sankey } from './reports/Sankey';
 import { Spending } from './reports/Spending';
@@ -33,10 +34,10 @@ function ReportBoundary({ children }: { children: ReactNode }) {
 }
 
 export function ReportRouter() {
-  const ageOfMoneyReportEnabled = useFeatureFlag('ageOfMoneyReport');
   const balanceForecastReportEnabled = useFeatureFlag('balanceForecastReport');
   const budgetAnalysisReportEnabled = useFeatureFlag('budgetAnalysisReport');
   const sankeyReportEnabled = useFeatureFlag('sankeyReport');
+  const monteCarloReportEnabled = useFeatureFlag('monteCarloReport');
 
   return (
     <Routes>
@@ -74,26 +75,22 @@ export function ReportRouter() {
           </ReportBoundary>
         }
       />
-      {ageOfMoneyReportEnabled && (
-        <>
-          <Route
-            path="/age-of-money"
-            element={
-              <ReportBoundary>
-                <AgeOfMoney />
-              </ReportBoundary>
-            }
-          />
-          <Route
-            path="/age-of-money/:id"
-            element={
-              <ReportBoundary>
-                <AgeOfMoney />
-              </ReportBoundary>
-            }
-          />
-        </>
-      )}
+      <Route
+        path="/age-of-money"
+        element={
+          <ReportBoundary>
+            <AgeOfMoney />
+          </ReportBoundary>
+        }
+      />
+      <Route
+        path="/age-of-money/:id"
+        element={
+          <ReportBoundary>
+            <AgeOfMoney />
+          </ReportBoundary>
+        }
+      />
       <Route
         path="/cash-flow"
         element={
@@ -234,6 +231,26 @@ export function ReportRouter() {
             element={
               <ReportBoundary>
                 <BalanceForecast />
+              </ReportBoundary>
+            }
+          />
+        </>
+      )}
+      {monteCarloReportEnabled && (
+        <>
+          <Route
+            path="/monte-carlo"
+            element={
+              <ReportBoundary>
+                <MonteCarlo />
+              </ReportBoundary>
+            }
+          />
+          <Route
+            path="/monte-carlo/:id"
+            element={
+              <ReportBoundary>
+                <MonteCarlo />
               </ReportBoundary>
             }
           />
