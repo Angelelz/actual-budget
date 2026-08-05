@@ -30,7 +30,7 @@ upstream migration that sorts _below_ ours leaves a gap and every load throws
 Rules for this fork:
 
 1. **Keep the fork migration's id above upstream's newest.** Currently
-   `1781400000000_add_schedule_auto_budget.js`. A normal "now" timestamp is
+   `1785801600000_add_schedule_auto_budget.js`. A normal "now" timestamp is
    correct; **never** use a max/far-future id (that puts _every_ future
    upstream migration below ours → guaranteed gaps).
 2. **After each upstream merge**, check whether upstream added a migration with
@@ -40,8 +40,10 @@ Rules for this fork:
    map in `server/migrate/migrations.ts`, and keep it idempotent.
 3. The fork migration is **idempotent** (adds the column only if missing) so it
    re-applies harmlessly to files that already have it.
-4. `patchBadMigrations` (in `migrations.ts`) drops the original interleaved id
-   `1778270218300` from old files so they re-converge. Leave that in place.
+4. `patchBadMigrations` (in `migrations.ts`) drops the superseded fork ids
+   (`1778270218300`, `1781400000000`) from old files so they re-converge.
+   Leave that in place, and append the old id there every time the fork
+   migration is re-keyed.
 
 ## Design principle: keep customizations in fork-owned files behind one-line seams
 
@@ -61,25 +63,27 @@ column type) — those are kept to a single line and marked, not eliminated.
 
 ## Feature: SimpleFIN credentials scoped per budget file (sync-server)
 
-Lets each budget file hold its own SimpleFIN token/access key, and lets a
-non-admin budget owner manage them (instead of admin-only global secrets).
+**Status: dropped in the 2026-08 upstream merge; re-implementation planned.**
 
-**Fork-owned files**
+Upstream shipped its own per-budget-file bank sync secrets architecture
+("Bank Sync Provider per budget file", #8316–#8318): secrets stored under a
+`name:<cloudFileId>` composite key, the file id passed via the
+`X-Actual-File-Id` header, admin-or-file-owner authorization in
+`app-secrets.js`, and a per-file → global credential fallback (see the Pluggy
+implementation in `app-pluggyai/pluggyai-service.js` as the reference).
+Upstream only wired up Pluggy; SimpleFIN still reads global secrets.
 
-- `packages/sync-server/src/services/simplefin-secrets.js` — `authorizeSimpleFinSecret()` + `isSimpleFinSecret` re-export
-- `packages/sync-server/src/services/simplefin-secrets.test.js`
-- `packages/sync-server/migrations/1781300000000-scope-simplefin-secrets.js`
+The fork's original custom scoping (scoped secret names with a
+`:file:` separator, mandatory per-file, `simplefin-secrets.js` seam module)
+was removed in favor of that architecture. The plan is to re-implement
+SimpleFIN per-file support by mirroring the Pluggy pattern.
 
-**Seams in upstream files**
+Still present from the old implementation (harmless, kept deliberately):
 
-- `src/services/secrets-service.js` — `getScopedSecretName`, `isSimpleFinSecret`, `ScopedSecretSeparator`
-- `src/app-secrets.js` — POST handler branches to `authorizeSimpleFinSecret()`
-- `src/app-simplefin/app-simplefin.js` — `getAuthorizedFileId`, `getSimpleFinSecretName` (scoped reads/writes)
-- `loot-core/src/server/accounts/app.ts` & `accounts/sync.ts` — pass the cloud `fileId` when setting/reading SimpleFIN secrets
-
-> Upstream also actively changes SimpleFIN (SSRF protection, credential-reset,
-> permission hardening). Reconcile carefully so security fixes are kept **and**
-> scoping is preserved.
+- `packages/sync-server/migrations/1781300000000-scope-simplefin-secrets.js` —
+  already applied on deployed servers; it only *copied* global secrets to
+  scoped names, so upstream's global reads keep working. The copied
+  `simplefin_*:file:<id>` rows are orphaned.
 
 ---
 
@@ -96,7 +100,7 @@ budget each month, and the cell renders read-only.
 - `packages/desktop-client/src/components/schedules/ScheduleAutoBudgetField.tsx` — the form field
 - `packages/desktop-client/src/hooks/useAutoManagedIncomeCategories.ts`
 - `packages/desktop-client/src/components/settings/AutoIncomeBudgetSettings.tsx` — horizon setting
-- `packages/loot-core/migrations/1781400000000_add_schedule_auto_budget.js` (idempotent — see "Migrations" below)
+- `packages/loot-core/migrations/1785801600000_add_schedule_auto_budget.js` (idempotent — see "Migrations" below)
 
 **Seams in upstream files**
 

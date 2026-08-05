@@ -10,7 +10,7 @@ import m1722804019000 from '#migrations/1722804019000_create_dashboard_table';
 import m1723665565000 from '#migrations/1723665565000_prefs';
 import m1765518577215 from '#migrations/1765518577215_multiple_dashboards';
 // Fork: schedule auto-budgeting migration (re-based above upstream — see FORK.md)
-import m1781400000000 from '#migrations/1781400000000_add_schedule_auto_budget';
+import m1785801600000 from '#migrations/1785801600000_add_schedule_auto_budget';
 import * as fs from '#platform/server/fs';
 import { logger } from '#platform/server/log';
 import * as sqlite from '#platform/server/sqlite';
@@ -25,7 +25,7 @@ const javascriptMigrations = {
   1723665565000: m1723665565000,
   1765518577215: m1765518577215,
   // Fork: schedule auto-budgeting (see FORK.md)
-  1781400000000: m1781400000000,
+  1785801600000: m1785801600000,
 };
 
 export async function withMigrationsDir(
@@ -67,15 +67,18 @@ async function patchBadMigrations(db: Database) {
     ]);
   }
 
-  // Fork: the original fork build recorded the schedule auto-budget migration
-  // with an interleaved id (1778270218300) that sorts before upstream's later
-  // migrations. Drop that record so the prefix check passes; the re-based,
-  // idempotent migration (1781400000000) then re-applies harmlessly. See FORK.md.
-  const forkInterleavedAutoBudgetMigration = 1778270218300;
-  if (appliedIds.includes(forkInterleavedAutoBudgetMigration)) {
-    sqlite.runQuery(db, 'DELETE FROM __migrations__ WHERE id = ?', [
-      forkInterleavedAutoBudgetMigration,
-    ]);
+  // Fork: earlier fork builds recorded the schedule auto-budget migration under
+  // ids that now sort before upstream migrations (1778270218300 originally,
+  // then 1781400000000 which upstream's 1783004650757 later undercut). Drop
+  // those records so the prefix check passes; the re-based, idempotent
+  // migration (1785801600000) then re-applies harmlessly. See FORK.md.
+  const forkInterleavedAutoBudgetMigrations = [1778270218300, 1781400000000];
+  for (const forkMigrationId of forkInterleavedAutoBudgetMigrations) {
+    if (appliedIds.includes(forkMigrationId)) {
+      sqlite.runQuery(db, 'DELETE FROM __migrations__ WHERE id = ?', [
+        forkMigrationId,
+      ]);
+    }
   }
 }
 
