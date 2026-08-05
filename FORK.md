@@ -61,29 +61,47 @@ column type) — those are kept to a single line and marked, not eliminated.
 
 ---
 
-## Feature: SimpleFIN credentials scoped per budget file (sync-server)
+## Feature: SimpleFIN credentials scoped per budget file
 
-**Status: dropped in the 2026-08 upstream merge; re-implementation planned.**
+Lets each budget file hold its own SimpleFIN token/access key, with a
+per-file → global fallback, and lets a non-admin budget owner manage them.
 
-Upstream shipped its own per-budget-file bank sync secrets architecture
+Implemented on **upstream's** per-budget-file bank sync secrets architecture
 ("Bank Sync Provider per budget file", #8316–#8318): secrets stored under a
 `name:<cloudFileId>` composite key, the file id passed via the
 `X-Actual-File-Id` header, admin-or-file-owner authorization in
-`app-secrets.js`, and a per-file → global credential fallback (see the Pluggy
-implementation in `app-pluggyai/pluggyai-service.js` as the reference).
-Upstream only wired up Pluggy; SimpleFIN still reads global secrets.
+`app-secrets.js`. The implementation deliberately mirrors upstream's Pluggy
+wiring (`app-pluggyai/`, `PluggyAiInitialiseModal`, `usePluggyAiStatus`)
+line-for-line, so if upstream later ships its own SimpleFIN per-file support,
+the diff should be near-identical and easy to reconcile (or drop ours).
 
-The fork's original custom scoping (scoped secret names with a
-`:file:` separator, mandatory per-file, `simplefin-secrets.js` seam module)
-was removed in favor of that architecture. The plan is to re-implement
-SimpleFIN per-file support by mirroring the Pluggy pattern.
+(The fork's pre-2026-08 custom scoping — `:file:` separator names, mandatory
+per-file, `simplefin-secrets.js` seam module — was removed in the 2026-08
+upstream merge in favor of this. Its sync-server migration
+`1781300000000-scope-simplefin-secrets.js` is kept: already applied on
+deployed servers; it only _copied_ global secrets, so the leftover
+`simplefin_*:file:<id>` rows are orphaned and harmless.)
 
-Still present from the old implementation (harmless, kept deliberately):
+**Seams in upstream files** (all mirror the Pluggy pattern in the same file)
 
-- `packages/sync-server/migrations/1781300000000-scope-simplefin-secrets.js` —
-  already applied on deployed servers; it only _copied_ global secrets to
-  scoped names, so upstream's global reads keep working. The copied
-  `simplefin_*:file:<id>` rows are orphaned.
+- `sync-server/src/app-simplefin/app-simplefin.js` — `canAccessFile`,
+  `hasCredentials(fileId)`, `getCredentialSource(fileId)`; all three routes
+  accept `X-Actual-File-Id` and resolve the credential scope (the claimed
+  access key is written back to the scope the setup token came from)
+- `sync-server/src/app-simplefin/app-simplefin.test.js` — per-file test cases
+- `loot-core/src/server/accounts/app.ts` — `simpleFinStatus` /
+  `simpleFinAccounts` send the header; `simpleFinBatchSync` passes
+  `cloudFileId`
+- `loot-core/src/server/accounts/sync.ts` — `downloadSimpleFinTransactions` /
+  `simpleFinBatchSync` take an optional trailing `fileId`
+- `desktop-client/src/hooks/useSimpleFinStatus.ts` — returns
+  `{ simpleFinStatus, setSimpleFinStatus }` (`BankSyncProviderStatus`)
+- `desktop-client/src/components/banksync/useBuiltInBankSyncProviders.ts` —
+  SimpleFIN gets `supportsPerBudgetFile: true`, Pluggy-style `canConfigure`,
+  scoped reset
+- `desktop-client/src/components/modals/SimpleFinInitialiseModal.tsx` +
+  `modals/modalsSlice.ts` — "For this budget only" toggle, scoped
+  `secret-set`
 
 ---
 

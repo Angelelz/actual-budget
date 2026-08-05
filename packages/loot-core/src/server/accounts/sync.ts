@@ -10,7 +10,6 @@ import { TRANSACTION_SORT_INCREMENT } from '#server/db/sort';
 import { TransactionError } from '#server/errors';
 import { runMutator } from '#server/mutators';
 import { post } from '#server/post';
-import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
 import { batchMessages } from '#server/sync';
 import { batchUpdateTransactions } from '#server/transactions';
@@ -41,15 +40,6 @@ import { title } from './title';
 
 function BankSyncError(type: string, code: string, details?: object) {
   return { type: 'BankSyncError', category: type, code, details };
-}
-
-function getSimpleFinFileId() {
-  const fileId = prefs.getPrefs()?.cloudFileId;
-  if (!fileId) {
-    throw BankSyncError('FILE_ID_REQUIRED', 'FILE_ID_REQUIRED');
-  }
-
-  return fileId;
 }
 
 function makeSplitTransaction(trans, subtransactions) {
@@ -199,6 +189,7 @@ async function downloadGoCardlessTransactions(
 async function downloadSimpleFinTransactions(
   acctId: AccountEntity['id'] | AccountEntity['id'][],
   since: string | string[],
+  fileId?: string,
 ) {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) return;
@@ -212,12 +203,12 @@ async function downloadSimpleFinTransactions(
     res = await post(
       getServer().SIMPLEFIN_SERVER + '/transactions',
       {
-        fileId: getSimpleFinFileId(),
         accountId: acctId,
         startDate: since,
       },
       {
         'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
       },
       // 5 minute timeout for batch sync, one minute for individual accounts
       Array.isArray(acctId) ? 300000 : 60000,
@@ -1195,7 +1186,11 @@ export async function syncAccount(
 
   let download;
   if (acctRow.account_sync_source === 'simpleFin') {
-    download = await downloadSimpleFinTransactions(acctId, syncStartDate);
+    download = await downloadSimpleFinTransactions(
+      acctId,
+      syncStartDate,
+      fileId,
+    );
   } else if (acctRow.account_sync_source === 'pluggyai') {
     download = await downloadPluggyAiTransactions(
       acctId,
@@ -1233,6 +1228,7 @@ export async function syncAccount(
 
 export async function simpleFinBatchSync(
   accounts: Array<Pick<AccountEntity, 'id' | 'account_id'>>,
+  fileId?: string,
 ) {
   const startDates = await Promise.all(
     accounts.map(async a => getAccountSyncStartDate(a.id)),
@@ -1241,6 +1237,7 @@ export async function simpleFinBatchSync(
   const res = await downloadSimpleFinTransactions(
     accounts.map(a => a.account_id),
     startDates,
+    fileId,
   );
 
   if (!res) {

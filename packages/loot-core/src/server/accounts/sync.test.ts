@@ -646,10 +646,7 @@ describe('Account sync', () => {
 describe('SimpleFin batch sync', () => {
   function mockSimpleFinTransactions(response) {
     vi.mocked(asyncStorage.getItem).mockResolvedValue('test-token');
-    handlers['/simplefin/transactions'] = data => {
-      expect(data.fileId).toBe('test-cloud-file-id');
-      return response;
-    };
+    handlers['/simplefin/transactions'] = () => response;
   }
 
   afterEach(() => {

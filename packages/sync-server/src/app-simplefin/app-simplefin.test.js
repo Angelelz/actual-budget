@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getAccountDb } from '#account-db';
 import { SecretName, secretsService } from '#services/secrets-service';
 import { assertUrlAllowed } from '#util/ssrf';
 
@@ -37,10 +38,14 @@ function mockFetch({ claim, accounts }) {
 const post = path =>
   request(app).post(path).set('x-actual-token', 'valid-token');
 
+const TEST_FILE_ID = 'simplefin-test-file';
+
 describe('app-simplefin', () => {
   beforeEach(() => {
     secretsService.set(SecretName.simplefin_token, null);
     secretsService.set(SecretName.simplefin_accessKey, null);
+    secretsService.set(SecretName.simplefin_token, null, TEST_FILE_ID);
+    secretsService.set(SecretName.simplefin_accessKey, null, TEST_FILE_ID);
     vi.spyOn(console, 'log').mockImplementation(vi.fn());
   });
 
@@ -66,6 +71,72 @@ describe('app-simplefin', () => {
       const res = await post('/status');
 
       expect(res.body.data.configured).toBe(false);
+    });
+
+    it('reports per-budget-file source when a file-scoped token is stored', async () => {
+      secretsService.set(SecretName.simplefin_token, SETUP_TOKEN, TEST_FILE_ID);
+
+      const res = await post('/status').set('X-Actual-File-Id', TEST_FILE_ID);
+
+      expect(res.body.data).toEqual({
+        configured: true,
+        source: 'per-budget-file',
+      });
+    });
+
+    it('falls back to global credentials when the file has none', async () => {
+      secretsService.set(SecretName.simplefin_token, SETUP_TOKEN);
+
+      const res = await post('/status').set('X-Actual-File-Id', TEST_FILE_ID);
+
+      expect(res.body.data).toEqual({
+        configured: true,
+        source: 'global',
+      });
+    });
+
+    it('reports not configured when neither scope has a token', async () => {
+      const res = await post('/status').set('X-Actual-File-Id', TEST_FILE_ID);
+
+      expect(res.body.data).toEqual({
+        configured: false,
+        source: null,
+      });
+    });
+
+    it('rejects an invalid file id', async () => {
+      const res = await post('/status').set(
+        'X-Actual-File-Id',
+        'bad/../file/id',
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.reason).toBe('invalid-file-id');
+    });
+
+    it('rejects a user without access to the file', async () => {
+      const db = getAccountDb();
+      db.mutate('DELETE FROM auth');
+      db.mutate(
+        "INSERT INTO auth (method, active, extra_data, display_name) VALUES ('openid', 1, '', 'OpenID')",
+      );
+      db.mutate('INSERT INTO files (id, deleted, owner) VALUES (?, FALSE, ?)', [
+        'simplefin-other-user-file',
+        'genericAdmin',
+      ]);
+
+      const res = await request(app)
+        .post('/status')
+        .set('x-actual-token', 'valid-token-user')
+        .set('X-Actual-File-Id', 'simplefin-other-user-file');
+
+      db.mutate('DELETE FROM files WHERE id = ?', [
+        'simplefin-other-user-file',
+      ]);
+      db.mutate('DELETE FROM auth');
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body.reason).toBe('file-access-denied');
     });
   });
 
@@ -247,6 +318,44 @@ describe('app-simplefin', () => {
       expect(global.fetch).not.toHaveBeenCalled();
       expect(secretsService.get(SecretName.simplefin_accessKey)).toBeNull();
     });
+
+    it('claims a file-scoped token and stores the access key at the same scope', async () => {
+      secretsService.set(SecretName.simplefin_token, SETUP_TOKEN, TEST_FILE_ID);
+      mockFetch({
+        claim: okResponse(VALID_ACCESS_KEY),
+        accounts: okResponse(
+          JSON.stringify({ accounts: [{ id: 'account-1' }] }),
+        ),
+      });
+
+      const res = await post('/accounts').set('X-Actual-File-Id', TEST_FILE_ID);
+
+      expect(res.body.data.accounts).toEqual([{ id: 'account-1' }]);
+      expect(
+        secretsService.get(SecretName.simplefin_accessKey, TEST_FILE_ID),
+      ).toBe(VALID_ACCESS_KEY);
+      expect(secretsService.get(SecretName.simplefin_accessKey)).toBeNull();
+    });
+
+    it('falls back to the global token when the file has no credentials', async () => {
+      secretsService.set(SecretName.simplefin_token, SETUP_TOKEN);
+      mockFetch({
+        claim: okResponse(VALID_ACCESS_KEY),
+        accounts: okResponse(
+          JSON.stringify({ accounts: [{ id: 'account-1' }] }),
+        ),
+      });
+
+      const res = await post('/accounts').set('X-Actual-File-Id', TEST_FILE_ID);
+
+      expect(res.body.data.accounts).toEqual([{ id: 'account-1' }]);
+      expect(secretsService.get(SecretName.simplefin_accessKey)).toBe(
+        VALID_ACCESS_KEY,
+      );
+      expect(
+        secretsService.get(SecretName.simplefin_accessKey, TEST_FILE_ID),
+      ).toBeNull();
+    });
   });
 
   describe('/transactions', () => {
@@ -264,6 +373,42 @@ describe('app-simplefin', () => {
 
       expect(res.body.data.error_code).toBe('INVALID_ACCESS_TOKEN');
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('uses the file-scoped access key when the file has credentials', async () => {
+      secretsService.set(SecretName.simplefin_token, SETUP_TOKEN, TEST_FILE_ID);
+      secretsService.set(
+        SecretName.simplefin_accessKey,
+        VALID_ACCESS_KEY,
+        TEST_FILE_ID,
+      );
+      mockFetch({
+        accounts: okResponse(
+          JSON.stringify({
+            accounts: [
+              {
+                id: 'account-1',
+                balance: '10.00',
+                currency: 'USD',
+                'balance-date': 1753999200,
+                org: { name: 'Test Bank' },
+                transactions: [],
+              },
+            ],
+            errors: [],
+          }),
+        ),
+      });
+
+      const res = await post('/transactions')
+        .set('X-Actual-File-Id', TEST_FILE_ID)
+        .send({
+          accountId: 'account-1',
+          startDate: '2026-07-01',
+        });
+
+      expect(res.body.data.error_code).toBeUndefined();
+      expect(res.body.data.startingBalance).toBe(1000);
     });
   });
 });
