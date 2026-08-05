@@ -297,6 +297,7 @@ async function linkSimpleFinAccount({
     bank.bank_id,
     startingDate,
     startingBalance,
+    getPrefs()?.cloudFileId,
   );
 
   await handleSyncResponse(syncRes, id);
