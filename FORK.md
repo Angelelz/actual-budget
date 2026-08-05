@@ -81,7 +81,7 @@ SimpleFIN per-file support by mirroring the Pluggy pattern.
 Still present from the old implementation (harmless, kept deliberately):
 
 - `packages/sync-server/migrations/1781300000000-scope-simplefin-secrets.js` —
-  already applied on deployed servers; it only *copied* global secrets to
+  already applied on deployed servers; it only _copied_ global secrets to
   scoped names, so upstream's global reads keep working. The copied
   `simplefin_*:file:<id>` rows are orphaned.
 
